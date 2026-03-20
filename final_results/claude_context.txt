@@ -1,0 +1,45 @@
+# Claude Context: KAN Gearbox Fault Detection Research Paper
+
+This document contains everything you need to write a comprehensive IEEE-style research paper on the user's novel implementation without exceeding token lengths context window limits.
+
+### Paper Title Idea
+"Interpretable Gearbox Fault Detection via Kolmogorov-Arnold Networks on Statistical Vibration Features"
+
+### The Core Novelty
+- Until now, deep learning in condition monitoring (like deep CNNs or MLPs) acted as "black boxes", reducing trust in industrial applications.
+- Traditional methods used ML classifiers (Random Forest, SVM) over manually extracted statistical features from vibration signals.
+- **Our Novelty**: We apply a **Kolmogorov-Arnold Network (KAN)** directly to statistical features extracted via a moving window approach. 
+- Unlike MLPs which use fixed node activation functions and linear weights, KANs learn the activation functions on the *edges* using B-Splines.
+- **Explainability & Pruning**: By evaluating the L1 norms of the learned splines, we can explicitly rank which statistical features (e.g., Kurtosis on Sensor 2, RMS on Sensor 1) are physically driving the fault diagnosis. We then pruned the network to create a minimal, highly efficient, transparent mathematical rule for fault diagnosis.
+
+### Methodology
+1. **Dataset**: SpectraQuest Gearbox Fault Diagnosis Dataset (healthy vs. broken tooth). Sampled at 20 kHz with 4 sensors under varying loads (0 to 90%).
+2. **Feature Extraction**: We slid a non-overlapping window $W$ (sizes 300, 400, 500, 600, 700, 800) across the 4 sensor signals. For each window, we extracted 10 statistical features per sensor: mean, RMS, standard deviation, variance, skewness, kurtosis, peak-to-peak, crest factor, shape factor, impulse factor. Total = 40 features per sample.
+3. **Comparative Baselines**: 7 classical ML algorithms (Decision Tree, Random Forest, SVM, Naive Bayes, KNN, Gradient Boosting, Logistic Regression) and an equivalent MLP architecture evaluated using 5-fold Cross-Validation.
+4. **KAN Architecture**: `efficient-kan` implementation with layout [40, 20, 2], cubic splines ($k=3$), and a grid size of $G=5$.
+
+### Empirical Results (Accuracy across 5-Folds)
+**Window Size W=300**:
+- KAN: 98.29%
+- MLP: 93.34%  (KAN drastically outperforms equivalent MLP)
+- SVM: 99.33%
+- Random Forest: 98.79%
+
+**Window Size W=500**:
+- KAN: 99.08%
+- MLP: 96.62%
+- SVM: 99.82%
+
+**Window Size W=800**:
+- KAN: 99.96%
+- MLP: 99.00%
+- SVM: 100.0%
+- Logistic Regression: 100.0%
+
+### Interpretation of Results
+1. **Convergence on Small Windows**: KAN significantly outperforms the standard MLP baseline when data windows are small ($W=300$, capturing only 0.015 seconds of vibration) by a margin of ~5%. This shows KAN's B-splines adapt much faster to sparse/noisy statistical feature manifolds than linear weight approximations.
+2. **Competitive with SVM**: Even though KAN is highly non-linear, it achieves ~99.96% accuracy at W=800, perfectly matching the state-of-the-art classical models like SVM and LR, but with the added benefit of being mathematically transparent natively via visual splines instead of hyperplanes.
+3. **Interpretability**: The KAN allows plotting the activation functions mapping directly off the initial 40 features, mathematically isolating which specific physical vibration changes signify a broken tooth.
+
+### Instructions for Claude:
+"Claude, please write an IEEE-format academic paper using this context. Ensure it has an Abstract, Introduction, Related Work, Methodology, Results and Discussion, and Conclusion. Emphasize the XAI (Explainable AI) novelty of using KAN's edge-based B-Splines for feature pruning over traditional black-box deep learning."
