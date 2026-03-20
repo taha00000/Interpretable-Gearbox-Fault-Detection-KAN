@@ -1,4 +1,22 @@
+"""
+03_baseline_ml.py
+-----------------
+Evaluates seven traditional ML classifiers on each of the six
+moving-window datasets (W = 300 → 800), using identical 5-fold
+stratified cross-validation to the KAN experiments in 04_kan_training.py.
+
+Classifiers: Decision Tree (DT), Random Forest (RF), SVM, Naïve Bayes (NB),
+             K-Nearest Neighbour (KNN), Gradient Boosting (GBC),
+             Logistic Regression (LR).
+
+Outputs (saved to results/):
+  baseline_accuracy.csv   — accuracy  (%) per model × window size
+  baseline_precision.csv  — precision (%) per model × window size
+  baseline_recall.csv     — recall    (%) per model × window size
+"""
+
 import os
+import warnings
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
@@ -10,106 +28,104 @@ from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
-import warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
-def get_models():
+# ── Paths ─────────────────────────────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data", "processed")
+OUT_DIR  = os.path.join(BASE_DIR, "results")
+WINDOWS  = [300, 400, 500, 600, 700, 800]
+N_FOLDS  = 5
+SEED     = 42
+
+
+# ── Model definitions ─────────────────────────────────────────────────────────
+def get_models() -> dict:
     return {
-        'DT': DecisionTreeClassifier(random_state=42),
-        'RF': RandomForestClassifier(random_state=42),
-        'SVM': SVC(random_state=42),
-        'NB': GaussianNB(),
-        'KNN': KNeighborsClassifier(),
-        'GBC': GradientBoostingClassifier(random_state=42),
-        'LR': LogisticRegression(random_state=42, max_iter=1000)
+        "DT" : DecisionTreeClassifier(random_state=SEED),
+        "RF" : RandomForestClassifier(n_estimators=100, random_state=SEED),
+        "SVM": SVC(kernel="rbf", random_state=SEED),
+        "NB" : GaussianNB(),
+        "KNN": KNeighborsClassifier(n_neighbors=5),
+        "GBC": GradientBoostingClassifier(n_estimators=100, random_state=SEED),
+        "LR" : LogisticRegression(max_iter=1000, random_state=SEED),
     }
 
-def evaluate_models_for_window(filepath):
-    """
-    Evaluates all 7 models on a given dataset file (one window size).
-    Returns a dict with model names as keys and dict of metrics (acc, prec, rec) as values.
-    """
-    df = pd.read_csv(filepath)
-    # The last columns are 'load' and 'label', everything else is features
-    X = df.drop(columns=['label', 'load']).values
-    y = df['label'].values
-    
-    models = get_models()
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    
-    results = {m: {'acc': [], 'prec': [], 'rec': []} for m in models}
-    
-    for train_index, test_index in skf.split(X, y):
-        X_train, X_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
-        
-        # Scale features
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-        
-        for name, model in models.items():
-            model.fit(X_train, y_train)
-            y_pred = model.predict(X_test)
-            
-            # Since it's binary classification (0=healthy, 1=faulty)
-            acc = accuracy_score(y_test, y_pred)
-            prec = precision_score(y_test, y_pred, average='macro')
-            rec = recall_score(y_test, y_pred, average='macro')
-            
-            results[name]['acc'].append(acc)
-            results[name]['prec'].append(prec)
-            results[name]['rec'].append(rec)
-            
-    # Average across folds
-    avg_results = {}
-    for name in models:
-        avg_results[name] = {
-            'acc': np.mean(results[name]['acc']),
-            'prec': np.mean(results[name]['prec']),
-            'rec': np.mean(results[name]['rec'])
-        }
-    return avg_results
 
+# ── Evaluation ────────────────────────────────────────────────────────────────
+def evaluate_window(filepath: str) -> dict:
+    """Run 5-fold CV for all 7 classifiers on one window-size dataset."""
+    df = pd.read_csv(filepath)
+    X  = df.drop(columns=["label", "load"]).values
+    y  = df["label"].values
+
+    models = get_models()
+    skf    = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+    acc_buf  = {m: [] for m in models}
+    prec_buf = {m: [] for m in models}
+    rec_buf  = {m: [] for m in models}
+
+    for fold, (tr, te) in enumerate(skf.split(X, y), 1):
+        X_tr, X_te = X[tr], X[te]
+        y_tr, y_te = y[tr], y[te]
+
+        scaler = StandardScaler()
+        X_tr   = scaler.fit_transform(X_tr)
+        X_te   = scaler.transform(X_te)
+
+        for name, clf in models.items():
+            clf.fit(X_tr, y_tr)
+            y_pred = clf.predict(X_te)
+            acc_buf[name].append(accuracy_score(y_te, y_pred))
+            prec_buf[name].append(precision_score(y_te, y_pred, average="macro", zero_division=0))
+            rec_buf[name].append(recall_score(y_te, y_pred,  average="macro", zero_division=0))
+
+    return {
+        name: {
+            "acc":  np.mean(acc_buf[name])  * 100,
+            "prec": np.mean(prec_buf[name]) * 100,
+            "rec":  np.mean(rec_buf[name])  * 100,
+        }
+        for name in models
+    }
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    data_dir = r"c:/Users/tahah/OneDrive/Desktop/Moving-window-based-feature-extraction-method-for-vibration-based-condition-monitoring-main/data/processed"
-    windows = [300, 400, 500, 600, 700, 800]
-    
-    # Store results: metric -> DataFrame(rows: models, columns: window sizes)
-    acc_table = pd.DataFrame(index=get_models().keys(), columns=windows)
-    prec_table = pd.DataFrame(index=get_models().keys(), columns=windows)
-    rec_table = pd.DataFrame(index=get_models().keys(), columns=windows)
-    
-    for W in windows:
-        filepath = os.path.join(data_dir, f"features_W{W}.csv")
-        if not os.path.exists(filepath):
-            print(f"File {filepath} not found, skipping...")
+    os.makedirs(OUT_DIR, exist_ok=True)
+    model_names = list(get_models().keys())
+
+    acc_tbl  = pd.DataFrame(index=model_names, columns=WINDOWS, dtype=float)
+    prec_tbl = pd.DataFrame(index=model_names, columns=WINDOWS, dtype=float)
+    rec_tbl  = pd.DataFrame(index=model_names, columns=WINDOWS, dtype=float)
+
+    for W in WINDOWS:
+        fp = os.path.join(DATA_DIR, f"features_W{W}.csv")
+        if not os.path.exists(fp):
+            print(f"[SKIP] {fp} not found — run 02_feature_extraction.py first.")
             continue
-            
-        print(f"Evaluating Baseline ML for W={W}...")
-        results = evaluate_models_for_window(filepath)
-        
-        for name, metrics in results.items():
-            acc_table.loc[name, W] = metrics['acc'] * 100
-            prec_table.loc[name, W] = metrics['prec'] * 100
-            rec_table.loc[name, W] = metrics['rec'] * 100
-            
-    # Save results first before printing
-    out_dir = r"c:/Users/tahah/OneDrive/Desktop/Moving-window-based-feature-extraction-method-for-vibration-based-condition-monitoring-main/results"
-    os.makedirs(out_dir, exist_ok=True)
-    acc_table.to_csv(os.path.join(out_dir, "baseline_accuracy.csv"))
-    prec_table.to_csv(os.path.join(out_dir, "baseline_precision.csv"))
-    rec_table.to_csv(os.path.join(out_dir, "baseline_recall.csv"))
-    
-    print("\n--- Accuracy (%) ---")
-    print(acc_table.to_markdown())
-    
-    print("\n--- Precision (%) ---")
-    print(prec_table.to_markdown())
-    
-    print("\n--- Recall (%) ---")
-    print(rec_table.to_markdown())
+        print(f"Evaluating baseline ML classifiers for W={W}…", flush=True)
+        res = evaluate_window(fp)
+        for name in model_names:
+            acc_tbl.loc[name, W]  = res[name]["acc"]
+            prec_tbl.loc[name, W] = res[name]["prec"]
+            rec_tbl.loc[name, W]  = res[name]["rec"]
+
+    # Save
+    acc_tbl.to_csv(os.path.join(OUT_DIR,  "baseline_accuracy.csv"))
+    prec_tbl.to_csv(os.path.join(OUT_DIR, "baseline_precision.csv"))
+    rec_tbl.to_csv(os.path.join(OUT_DIR,  "baseline_recall.csv"))
+
+    pd.set_option("display.float_format", "{:.2f}".format)
+    print("\n── Accuracy (%) ──")
+    print(acc_tbl.to_string())
+    print("\n── Precision (%) ──")
+    print(prec_tbl.to_string())
+    print("\n── Recall (%) ──")
+    print(rec_tbl.to_string())
+    print(f"\nResults saved to {OUT_DIR}/")
+
 
 if __name__ == "__main__":
     main()
