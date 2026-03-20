@@ -1,222 +1,249 @@
+"""
+04_kan_training.py
+------------------
+Trains and benchmarks two neural architectures against each other:
+  • KAN  [40 → 20 → 2]  — cubic B-spline edges (efficient_kan implementation)
+  • MLP  [40 → 20 → 2]  — ReLU activations, equivalent parameter budget
+
+Both are evaluated under identical 5-fold stratified cross-validation with
+MinMax-scaled features, using the same random seed and fold splits as the
+baseline classifiers in 03_baseline_ml.py.
+
+The trained KAN model from the BEST fold of W=600 is saved to model/ for
+later use in 05_interpretability_and_pruning.py.
+
+Outputs (saved to results/):
+  dl_accuracy.csv    — accuracy  (%) for KAN and MLP across all window sizes
+  dl_precision.csv   — precision (%)
+  dl_recall.csv      — recall    (%)
+  dl_f1.csv          — F1        (%)
+
+model/ (saved artefacts):
+  kan_best_W600.pt          — state_dict of best-fold KAN on W=600
+  kan_best_W600_scaler.npy  — MinMaxScaler parameters for that fold
+"""
+
 import os
-import torch
-import torch.nn as nn
+import copy
+import warnings
 import numpy as np
 import pandas as pd
+import torch
+import torch.nn as nn
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+# Import efficient_kan (local folder takes precedence over installed package)
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "efficient_kan"))
 from efficient_kan import KAN
-import copy
 
-import warnings
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
+# ── Paths ─────────────────────────────────────────────────────────────────────
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR  = os.path.join(BASE_DIR, "data", "processed")
+OUT_DIR   = os.path.join(BASE_DIR, "results")
+MODEL_DIR = os.path.join(BASE_DIR, "model")
+WINDOWS   = [300, 400, 500, 600, 700, 800]
+SAVE_MODEL_FOR_W = 600   # window size whose best-fold model is saved for XAI
+
+# ── Hyper-parameters ──────────────────────────────────────────────────────────
+ARCHITECTURE = [40, 20, 2]
+GRID_SIZE    = 5
+SPLINE_ORDER = 3
+EPOCHS       = 50
+LR           = 1e-3
+BATCH_SIZE   = 512
+PATIENCE     = 10
+N_FOLDS      = 5
+SEED         = 42
+
+
+# ── MLP definition ────────────────────────────────────────────────────────────
 class MLP(nn.Module):
-    def __init__(self, architecture):
+    def __init__(self, arch: list):
         super().__init__()
         layers = []
-        for i in range(len(architecture) - 1):
-            layers.append(nn.Linear(architecture[i], architecture[i+1]))
-            if i < len(architecture) - 2:
+        for i in range(len(arch) - 1):
+            layers.append(nn.Linear(arch[i], arch[i + 1]))
+            if i < len(arch) - 2:
                 layers.append(nn.ReLU())
         self.net = nn.Sequential(*layers)
-        
+
     def forward(self, x):
         return self.net(x)
 
-def train_mlp(X_train, y_train, X_val, y_val, X_test, y_test, architecture, epochs=20, lr=1e-3, patience=5):
-    model = MLP(architecture)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.CrossEntropyLoss()
-    
-    X_train_t = torch.tensor(X_train, dtype=torch.float32)
-    y_train_t = torch.tensor(y_train, dtype=torch.long)
+
+# ── Generic training loop ─────────────────────────────────────────────────────
+def train_model(model, X_tr, y_tr, X_val, y_val, X_te, y_te,
+                use_closure=False):
+    """Train *any* nn.Module with early stopping; return test metrics."""
+    X_tr_t  = torch.tensor(X_tr,  dtype=torch.float32)
+    y_tr_t  = torch.tensor(y_tr,  dtype=torch.long)
     X_val_t = torch.tensor(X_val, dtype=torch.float32)
     y_val_t = torch.tensor(y_val, dtype=torch.long)
-    X_test_t = torch.tensor(X_test, dtype=torch.float32)
-    y_test_t = torch.tensor(y_test, dtype=torch.long)
-    
-    train_dataset = torch.utils.data.TensorDataset(X_train_t, y_train_t)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1024, shuffle=True)
-    
-    best_val_loss = float('inf')
-    best_model_state = None
-    patience_counter = 0
-    
-    for epoch in range(epochs):
+    X_te_t  = torch.tensor(X_te,  dtype=torch.float32)
+
+    loader    = torch.utils.data.DataLoader(
+        torch.utils.data.TensorDataset(X_tr_t, y_tr_t),
+        batch_size=BATCH_SIZE, shuffle=True
+    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    criterion = nn.CrossEntropyLoss()
+
+    best_val  = float("inf")
+    best_state= None
+    patience  = 0
+
+    for _ in range(EPOCHS):
         model.train()
-        for batch_X, batch_y in train_loader:
-            optimizer.zero_grad()
-            out = model(batch_X)
-            loss = criterion(out, batch_y)
-            loss.backward()
-            optimizer.step()
-        
+        for bx, by in loader:
+            if use_closure:
+                def closure():
+                    optimizer.zero_grad()
+                    loss = criterion(model(bx), by)
+                    loss.backward()
+                    return loss
+                optimizer.step(closure)
+            else:
+                optimizer.zero_grad()
+                loss = criterion(model(bx), by)
+                loss.backward()
+                optimizer.step()
+
         model.eval()
         with torch.no_grad():
-            val_out = model(X_val_t)
-            val_loss = criterion(val_out, y_val_t).item()
-            
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_model_state = copy.deepcopy(model.state_dict())
-            patience_counter = 0
+            val_loss = criterion(model(X_val_t), y_val_t).item()
+
+        if val_loss < best_val:
+            best_val   = val_loss
+            best_state = copy.deepcopy(model.state_dict())
+            patience   = 0
         else:
-            patience_counter += 1
-            if patience_counter >= patience:
+            patience += 1
+            if patience >= PATIENCE:
                 break
-                
-    model.load_state_dict(best_model_state)
+
+    if best_state:
+        model.load_state_dict(best_state)
+
     model.eval()
     with torch.no_grad():
-        test_out = model(X_test_t)
-        preds = torch.argmax(test_out, dim=1).numpy()
-        
-    acc = accuracy_score(y_test, preds)
-    prec = precision_score(y_test, preds, average='macro')
-    rec = recall_score(y_test, preds, average='macro')
-    f1 = f1_score(y_test, preds, average='macro')
-    return acc, prec, rec, f1
+        preds = torch.argmax(model(X_te_t), dim=1).numpy()
 
-def train_kan(X_train, y_train, X_val, y_val, X_test, y_test, architecture, grid=5, k=3, epochs=20, lr=1e-3, patience=5):
-    model = KAN(layers_hidden=architecture, grid_size=grid, spline_order=k)
-    
-    X_train_t = torch.tensor(X_train, dtype=torch.float32)
-    y_train_t = torch.tensor(y_train, dtype=torch.long)
-    X_val_t = torch.tensor(X_val, dtype=torch.float32)
-    y_val_t = torch.tensor(y_val, dtype=torch.long)
-    
-    train_dataset = torch.utils.data.TensorDataset(X_train_t, y_train_t)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=512, shuffle=True)
-    
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.CrossEntropyLoss()
-    
-    best_val_loss = float('inf')
-    best_model_state = None
-    patience_counter = 0
-    
-    for epoch in range(epochs):
-        # train step
-        model.train()
-        for batch_X, batch_y in train_loader:
-            def closure():
-                optimizer.zero_grad()
-                pred = model(batch_X)
-                loss = criterion(pred, batch_y)
-                loss.backward()
-                return loss
-            optimizer.step(closure)
-        
-        # eval step
-        model.eval()
-        with torch.no_grad():
-            val_pred = model(X_val_t)
-            val_loss = criterion(val_pred, y_val_t).item()
-            
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            # PyKAN state dict contains splines coefs
-            best_model_state = copy.deepcopy(model.state_dict())
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            if patience_counter >= patience:
-                break
-                
-    if best_model_state is not None:
-        model.load_state_dict(best_model_state)
-        
-    with torch.no_grad():
-        test_pred = model(torch.tensor(X_test, dtype=torch.float32))
-        preds = torch.argmax(test_pred, dim=1).numpy()
-        
-    acc = accuracy_score(y_test, preds)
-    prec = precision_score(y_test, preds, average='macro')
-    rec = recall_score(y_test, preds, average='macro')
-    f1 = f1_score(y_test, preds, average='macro')
-    return acc, prec, rec, f1
+    return (
+        accuracy_score (y_te, preds),
+        precision_score(y_te, preds, average="macro", zero_division=0),
+        recall_score   (y_te, preds, average="macro", zero_division=0),
+        f1_score       (y_te, preds, average="macro", zero_division=0),
+        model
+    )
 
-def evaluate_kan_mlp(filepath):
+
+# ── Per-window evaluation ─────────────────────────────────────────────────────
+def evaluate_window(filepath: str, save_kan_model: bool = False):
     df = pd.read_csv(filepath)
-    X = df.drop(columns=['label', 'load']).values
-    y = df['label'].values
-    
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    
-    kan_metrics = {'acc': [], 'prec': [], 'rec': [], 'f1': []}
-    mlp_metrics = {'acc': [], 'prec': [], 'rec': [], 'f1': []}
-    
-    fold = 1
-    for train_idx, test_idx in skf.split(X, y):
-        X_train_full, X_test = X[train_idx], X[test_idx]
-        y_train_full, y_test = y[train_idx], y[test_idx]
-        
-        # Split train_full into train and val for early stopping (e.g. 15% of train = ~12% overall)
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train_full, y_train_full, test_size=0.15, stratify=y_train_full, random_state=42)
-            
-        scaler = MinMaxScaler(feature_range=(0,1))
-        X_train = scaler.fit_transform(X_train)
-        X_val = scaler.transform(X_val)
-        X_test = scaler.transform(X_test)
-        
-        arch = [X.shape[1], 20, 2]
-        
-        # Train MLP
-        acc_m, prec_m, rec_m, f1_m = train_mlp(X_train, y_train, X_val, y_val, X_test, y_test, arch)
-        mlp_metrics['acc'].append(acc_m)
-        mlp_metrics['prec'].append(prec_m)
-        mlp_metrics['rec'].append(rec_m)
-        mlp_metrics['f1'].append(f1_m)
-        
-        # Train KAN
-        acc_k, prec_k, rec_k, f1_k = train_kan(X_train, y_train, X_val, y_val, X_test, y_test, arch)
-        kan_metrics['acc'].append(acc_k)
-        kan_metrics['prec'].append(prec_k)
-        kan_metrics['rec'].append(rec_k)
-        kan_metrics['f1'].append(f1_k)
-        
-        print(f"  Fold {fold}: KAN Acc={acc_k:.4f}, MLP Acc={acc_m:.4f}", flush=True)
-        fold += 1
-        
-    def avg_metrics(m):
-        return {k: np.mean(v) for k, v in m.items()}
-        
-    return avg_metrics(kan_metrics), avg_metrics(mlp_metrics)
+    X  = df.drop(columns=["label", "load"]).values
+    y  = df["label"].values
 
+    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+    kan_buf = {k: [] for k in ("acc", "prec", "rec", "f1")}
+    mlp_buf = {k: [] for k in ("acc", "prec", "rec", "f1")}
+
+    best_kan_acc   = -1
+    best_kan_model = None
+    best_scaler    = None
+
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y), 1):
+        X_tr_full, X_te = X[tr_idx], X[te_idx]
+        y_tr_full, y_te = y[tr_idx], y[te_idx]
+
+        X_tr, X_val, y_tr, y_val = train_test_split(
+            X_tr_full, y_tr_full,
+            test_size=0.15, stratify=y_tr_full, random_state=SEED
+        )
+        scaler = MinMaxScaler()
+        X_tr   = scaler.fit_transform(X_tr)
+        X_val  = scaler.transform(X_val)
+        X_te_s = scaler.transform(X_te)
+
+        # ── KAN ──────────────────────────────────────────────────────────────
+        kan = KAN(layers_hidden=ARCHITECTURE,
+                  grid_size=GRID_SIZE, spline_order=SPLINE_ORDER)
+        acc_k, prec_k, rec_k, f1_k, kan = train_model(
+            kan, X_tr, y_tr, X_val, y_val, X_te_s, y_te, use_closure=True)
+
+        kan_buf["acc"].append(acc_k);  kan_buf["prec"].append(prec_k)
+        kan_buf["rec"].append(rec_k);  kan_buf["f1"].append(f1_k)
+
+        if save_kan_model and acc_k > best_kan_acc:
+            best_kan_acc   = acc_k
+            best_kan_model = copy.deepcopy(kan.state_dict())
+            best_scaler    = (scaler.data_min_.copy(),
+                              scaler.data_max_.copy(),
+                              scaler.scale_.copy())
+
+        # ── MLP ──────────────────────────────────────────────────────────────
+        mlp = MLP(ARCHITECTURE)
+        acc_m, prec_m, rec_m, f1_m, _ = train_model(
+            mlp, X_tr, y_tr, X_val, y_val, X_te_s, y_te, use_closure=False)
+
+        mlp_buf["acc"].append(acc_m);  mlp_buf["prec"].append(prec_m)
+        mlp_buf["rec"].append(rec_m);  mlp_buf["f1"].append(f1_m)
+
+        print(f"  Fold {fold}: KAN {acc_k*100:.2f}%  |  MLP {acc_m*100:.2f}%",
+              flush=True)
+
+    if save_kan_model and best_kan_model is not None:
+        os.makedirs(MODEL_DIR, exist_ok=True)
+        torch.save(best_kan_model,
+                   os.path.join(MODEL_DIR, f"kan_best_W{SAVE_MODEL_FOR_W}.pt"))
+        np.save(os.path.join(MODEL_DIR,
+                             f"kan_best_W{SAVE_MODEL_FOR_W}_scaler.npy"),
+                np.array(best_scaler, dtype=object))
+        print(f"  [Saved] Best-fold KAN model → model/kan_best_W{SAVE_MODEL_FOR_W}.pt")
+
+    kan_avg = {k: np.mean(v) * 100 for k, v in kan_buf.items()}
+    mlp_avg = {k: np.mean(v) * 100 for k, v in mlp_buf.items()}
+    return kan_avg, mlp_avg
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    data_dir = r"c:/Users/tahah/OneDrive/Desktop/Moving-window-based-feature-extraction-method-for-vibration-based-condition-monitoring-main/data/processed"
-    windows = [300, 400, 500, 600, 700, 800]
-    out_dir = r"c:/Users/tahah/OneDrive/Desktop/Moving-window-based-feature-extraction-method-for-vibration-based-condition-monitoring-main/results"
-    os.makedirs(out_dir, exist_ok=True)
-    
-    # Tables for Acc, Prec, Rec
-    acc_table = pd.DataFrame(index=['KAN', 'MLP'], columns=windows)
-    prec_table = pd.DataFrame(index=['KAN', 'MLP'], columns=windows)
-    rec_table = pd.DataFrame(index=['KAN', 'MLP'], columns=windows)
-    f1_table = pd.DataFrame(index=['KAN', 'MLP'], columns=windows)
-    
-    for W in windows:
-        filepath = os.path.join(data_dir, f"features_W{W}.csv")
-        if not os.path.exists(filepath):
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    acc_tbl  = pd.DataFrame(index=["KAN", "MLP"], columns=WINDOWS, dtype=float)
+    prec_tbl = pd.DataFrame(index=["KAN", "MLP"], columns=WINDOWS, dtype=float)
+    rec_tbl  = pd.DataFrame(index=["KAN", "MLP"], columns=WINDOWS, dtype=float)
+    f1_tbl   = pd.DataFrame(index=["KAN", "MLP"], columns=WINDOWS, dtype=float)
+
+    for W in WINDOWS:
+        fp = os.path.join(DATA_DIR, f"features_W{W}.csv")
+        if not os.path.exists(fp):
+            print(f"[SKIP] {fp} — run 02_feature_extraction.py first.")
             continue
-        print(f"\nEvaluating KAN and MLP for window size W={W}...", flush=True)
-        kan_res, mlp_res = evaluate_kan_mlp(filepath)
-        
-        for name, res in [('KAN', kan_res), ('MLP', mlp_res)]:
-            acc_table.loc[name, W] = res['acc'] * 100
-            prec_table.loc[name, W] = res['prec'] * 100
-            rec_table.loc[name, W] = res['rec'] * 100
-            f1_table.loc[name, W] = res['f1'] * 100
-            
-    acc_table.to_csv(os.path.join(out_dir, "dl_accuracy.csv"))
-    prec_table.to_csv(os.path.join(out_dir, "dl_precision.csv"))
-    rec_table.to_csv(os.path.join(out_dir, "dl_recall.csv"))
-            
-    print("\n--- Accuracy (%) ---")
-    print(acc_table.to_markdown())
+        save_flag = (W == SAVE_MODEL_FOR_W)
+        print(f"\nEvaluating KAN & MLP for W={W}…", flush=True)
+        kan_res, mlp_res = evaluate_window(fp, save_kan_model=save_flag)
+
+        for tag, res in (("KAN", kan_res), ("MLP", mlp_res)):
+            acc_tbl.loc[tag, W]  = res["acc"]
+            prec_tbl.loc[tag, W] = res["prec"]
+            rec_tbl.loc[tag, W]  = res["rec"]
+            f1_tbl.loc[tag, W]   = res["f1"]
+
+    acc_tbl.to_csv(os.path.join(OUT_DIR,  "dl_accuracy.csv"))
+    prec_tbl.to_csv(os.path.join(OUT_DIR, "dl_precision.csv"))
+    rec_tbl.to_csv(os.path.join(OUT_DIR,  "dl_recall.csv"))
+    f1_tbl.to_csv(os.path.join(OUT_DIR,   "dl_f1.csv"))
+
+    pd.set_option("display.float_format", "{:.2f}".format)
+    print("\n── Accuracy (%) ──")
+    print(acc_tbl.to_string())
+    print(f"\nResults saved to {OUT_DIR}/")
+
 
 if __name__ == "__main__":
     main()
