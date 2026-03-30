@@ -2,8 +2,8 @@
 04_kan_training.py
 ------------------
 Trains and benchmarks two neural architectures against each other:
-  • KAN  [40 → 20 → 2]  — cubic B-spline edges (efficient_kan implementation)
-  • MLP  [40 → 20 → 2]  — ReLU activations, equivalent parameter budget
+  - KAN  [40 -> 20 -> 2]  -- cubic B-spline edges (efficient_kan implementation)
+  - MLP  [40 -> 20 -> 2]  -- ReLU activations, equivalent parameter budget
 
 Both are evaluated under identical 5-fold stratified cross-validation with
 MinMax-scaled features, using the same random seed and fold splits as the
@@ -13,14 +13,16 @@ The trained KAN model from the BEST fold of W=600 is saved to model/ for
 later use in 05_interpretability_and_pruning.py.
 
 Outputs (saved to results/):
-  dl_accuracy.csv    — accuracy  (%) for KAN and MLP across all window sizes
-  dl_precision.csv   — precision (%)
-  dl_recall.csv      — recall    (%)
-  dl_f1.csv          — F1        (%)
+  dl_accuracy.csv              -- accuracy  (%) for KAN and MLP across all window sizes
+  dl_precision.csv             -- precision (%)
+  dl_recall.csv                -- recall    (%)
+  dl_f1.csv                    -- F1        (%)
+  dl_results_detailed.csv      -- per-fold metrics for KAN and MLP
+  dl_summary.csv               -- mean +/- std summary for all metrics
 
 model/ (saved artefacts):
-  kan_best_W600.pt          — state_dict of best-fold KAN on W=600
-  kan_best_W600_scaler.npy  — MinMaxScaler parameters for that fold
+  kan_best_W600.pt          -- state_dict of best-fold KAN on W=600
+  kan_best_W600_scaler.npy  -- MinMaxScaler parameters for that fold
 """
 
 import os
@@ -41,7 +43,7 @@ from efficient_kan import KAN
 
 warnings.filterwarnings("ignore")
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# -- Paths ---------------------------------------------------------------------
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR  = os.path.join(BASE_DIR, "data", "processed")
 OUT_DIR   = os.path.join(BASE_DIR, "results")
@@ -49,7 +51,7 @@ MODEL_DIR = os.path.join(BASE_DIR, "model")
 WINDOWS   = [300, 400, 500, 600, 700, 800]
 SAVE_MODEL_FOR_W = 600   # window size whose best-fold model is saved for XAI
 
-# ── Hyper-parameters ──────────────────────────────────────────────────────────
+# -- Hyper-parameters ----------------------------------------------------------
 ARCHITECTURE = [40, 20, 2]
 GRID_SIZE    = 5
 SPLINE_ORDER = 3
@@ -61,7 +63,7 @@ N_FOLDS      = 5
 SEED         = 42
 
 
-# ── MLP definition ────────────────────────────────────────────────────────────
+# -- MLP definition ------------------------------------------------------------
 class MLP(nn.Module):
     def __init__(self, arch: list):
         super().__init__()
@@ -76,7 +78,7 @@ class MLP(nn.Module):
         return self.net(x)
 
 
-# ── Generic training loop ─────────────────────────────────────────────────────
+# -- Generic training loop -----------------------------------------------------
 def train_model(model, X_tr, y_tr, X_val, y_val, X_te, y_te,
                 use_closure=False):
     """Train *any* nn.Module with early stopping; return test metrics."""
@@ -142,8 +144,8 @@ def train_model(model, X_tr, y_tr, X_val, y_val, X_te, y_te,
     )
 
 
-# ── Per-window evaluation ─────────────────────────────────────────────────────
-def evaluate_window(filepath: str, save_kan_model: bool = False):
+# -- Per-window evaluation -----------------------------------------------------
+def evaluate_window(filepath: str, W: int, save_kan_model: bool = False):
     df = pd.read_csv(filepath)
     X  = df.drop(columns=["label", "load"]).values
     y  = df["label"].values
@@ -155,6 +157,8 @@ def evaluate_window(filepath: str, save_kan_model: bool = False):
     best_kan_acc   = -1
     best_kan_model = None
     best_scaler    = None
+
+    per_fold_rows = []
 
     for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y), 1):
         X_tr_full, X_te = X[tr_idx], X[te_idx]
@@ -169,7 +173,7 @@ def evaluate_window(filepath: str, save_kan_model: bool = False):
         X_val  = scaler.transform(X_val)
         X_te_s = scaler.transform(X_te)
 
-        # ── KAN ──────────────────────────────────────────────────────────────
+        # -- KAN ---------------------------------------------------------------
         kan = KAN(layers_hidden=ARCHITECTURE,
                   grid_size=GRID_SIZE, spline_order=SPLINE_ORDER)
         acc_k, prec_k, rec_k, f1_k, kan = train_model(
@@ -177,6 +181,11 @@ def evaluate_window(filepath: str, save_kan_model: bool = False):
 
         kan_buf["acc"].append(acc_k);  kan_buf["prec"].append(prec_k)
         kan_buf["rec"].append(rec_k);  kan_buf["f1"].append(f1_k)
+        per_fold_rows.append({
+            "Model": "KAN", "W": W, "Fold": fold,
+            "Accuracy": acc_k * 100, "Precision": prec_k * 100,
+            "Recall": rec_k * 100, "F1": f1_k * 100,
+        })
 
         if save_kan_model and acc_k > best_kan_acc:
             best_kan_acc   = acc_k
@@ -185,13 +194,18 @@ def evaluate_window(filepath: str, save_kan_model: bool = False):
                               scaler.data_max_.copy(),
                               scaler.scale_.copy())
 
-        # ── MLP ──────────────────────────────────────────────────────────────
+        # -- MLP ---------------------------------------------------------------
         mlp = MLP(ARCHITECTURE)
         acc_m, prec_m, rec_m, f1_m, _ = train_model(
             mlp, X_tr, y_tr, X_val, y_val, X_te_s, y_te, use_closure=False)
 
         mlp_buf["acc"].append(acc_m);  mlp_buf["prec"].append(prec_m)
         mlp_buf["rec"].append(rec_m);  mlp_buf["f1"].append(f1_m)
+        per_fold_rows.append({
+            "Model": "MLP", "W": W, "Fold": fold,
+            "Accuracy": acc_m * 100, "Precision": prec_m * 100,
+            "Recall": rec_m * 100, "F1": f1_m * 100,
+        })
 
         print(f"  Fold {fold}: KAN {acc_k*100:.2f}%  |  MLP {acc_m*100:.2f}%",
               flush=True)
@@ -203,14 +217,16 @@ def evaluate_window(filepath: str, save_kan_model: bool = False):
         np.save(os.path.join(MODEL_DIR,
                              f"kan_best_W{SAVE_MODEL_FOR_W}_scaler.npy"),
                 np.array(best_scaler, dtype=object))
-        print(f"  [Saved] Best-fold KAN model → model/kan_best_W{SAVE_MODEL_FOR_W}.pt")
+        print(f"  [Saved] Best-fold KAN model -> model/kan_best_W{SAVE_MODEL_FOR_W}.pt")
 
     kan_avg = {k: np.mean(v) * 100 for k, v in kan_buf.items()}
+    kan_std = {k + "_std": np.std(v) * 100 for k, v in kan_buf.items()}
     mlp_avg = {k: np.mean(v) * 100 for k, v in mlp_buf.items()}
-    return kan_avg, mlp_avg
+    mlp_std = {k + "_std": np.std(v) * 100 for k, v in mlp_buf.items()}
+    return {**kan_avg, **kan_std}, {**mlp_avg, **mlp_std}, per_fold_rows
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -219,30 +235,52 @@ def main():
     rec_tbl  = pd.DataFrame(index=["KAN", "MLP"], columns=WINDOWS, dtype=float)
     f1_tbl   = pd.DataFrame(index=["KAN", "MLP"], columns=WINDOWS, dtype=float)
 
+    all_fold_rows = []
+    summary_rows  = []
+
     for W in WINDOWS:
         fp = os.path.join(DATA_DIR, f"features_W{W}.csv")
         if not os.path.exists(fp):
-            print(f"[SKIP] {fp} — run 02_feature_extraction.py first.")
+            print(f"[SKIP] {fp} -- run 02_feature_extraction.py first.")
             continue
         save_flag = (W == SAVE_MODEL_FOR_W)
-        print(f"\nEvaluating KAN & MLP for W={W}…", flush=True)
-        kan_res, mlp_res = evaluate_window(fp, save_kan_model=save_flag)
+        print(f"\nEvaluating KAN & MLP for W={W}...", flush=True)
+        kan_res, mlp_res, fold_rows = evaluate_window(fp, W, save_kan_model=save_flag)
+        all_fold_rows.extend(fold_rows)
 
         for tag, res in (("KAN", kan_res), ("MLP", mlp_res)):
             acc_tbl.loc[tag, W]  = res["acc"]
             prec_tbl.loc[tag, W] = res["prec"]
             rec_tbl.loc[tag, W]  = res["rec"]
             f1_tbl.loc[tag, W]   = res["f1"]
+            summary_rows.append({
+                "Model": tag, "W": W,
+                "Accuracy":  f"{res['acc']:.2f} +/- {res['acc_std']:.2f}",
+                "Precision": f"{res['prec']:.2f} +/- {res['prec_std']:.2f}",
+                "Recall":    f"{res['rec']:.2f} +/- {res['rec_std']:.2f}",
+                "F1":        f"{res['f1']:.2f} +/- {res['f1_std']:.2f}",
+            })
 
+    # Save mean-only tables (backward compatible)
     acc_tbl.to_csv(os.path.join(OUT_DIR,  "dl_accuracy.csv"))
     prec_tbl.to_csv(os.path.join(OUT_DIR, "dl_precision.csv"))
     rec_tbl.to_csv(os.path.join(OUT_DIR,  "dl_recall.csv"))
     f1_tbl.to_csv(os.path.join(OUT_DIR,   "dl_f1.csv"))
 
+    # Save per-fold detailed results
+    pd.DataFrame(all_fold_rows).to_csv(
+        os.path.join(OUT_DIR, "dl_results_detailed.csv"), index=False)
+
+    # Save summary with +/- std
+    pd.DataFrame(summary_rows).to_csv(
+        os.path.join(OUT_DIR, "dl_summary.csv"), index=False)
+
     pd.set_option("display.float_format", "{:.2f}".format)
-    print("\n── Accuracy (%) ──")
+    print("\n-- Accuracy (%) --")
     print(acc_tbl.to_string())
     print(f"\nResults saved to {OUT_DIR}/")
+    print(f"  Per-fold details -> dl_results_detailed.csv")
+    print(f"  Summary (+/-std) -> dl_summary.csv")
 
 
 if __name__ == "__main__":
