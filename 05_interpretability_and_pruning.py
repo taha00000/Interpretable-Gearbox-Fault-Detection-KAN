@@ -71,12 +71,12 @@ DATA_DIR  = os.path.join(BASE_DIR, "data", "processed")
 OUT_DIR   = os.path.join(BASE_DIR, "results")
 WINDOWS   = [300, 400, 500, 600, 700, 800]
 
-# Primary window for in-depth analysis (all 40 per-feature spline plots).
+# Primary window for in-depth analysis (all 44 per-feature spline plots).
 # Other windows get importance ranking + pruning validation only.
 PRIMARY_W = 600
 
 # ── KAN hyper-parameters (must match 04_kan_training.py) ─────────────────────
-ARCHITECTURE = [40, 20, 2]
+# ARCHITECTURE is set dynamically from feature count at runtime
 GRID_SIZE    = 5
 SPLINE_ORDER = 3
 EPOCHS_XAI   = 80          # slightly more epochs for full-dataset XAI model
@@ -87,7 +87,7 @@ SEED         = 42
 
 # Pruning: fraction of features to keep (top-K by L1 norm)
 PRUNE_THRESHOLD = 0.05     # features with importance < 5 % of max are pruned
-N_FOLDS_PRUNE   = 5
+N_FOLDS_PRUNE   = 10       # matches Hassan et al. 2026 (10-fold CV)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -104,7 +104,9 @@ def load_dataset(W: int):
 
 def train_kan_full(X_scaled: np.ndarray, y: np.ndarray) -> KAN:
     """Train a KAN on the FULL (scaled) dataset for XAI analysis."""
-    model = KAN(layers_hidden=ARCHITECTURE,
+    n_features   = X_scaled.shape[1]
+    architecture = [n_features, n_features // 2, 2]
+    model = KAN(layers_hidden=architecture,
                 grid_size=GRID_SIZE, spline_order=SPLINE_ORDER)
     Xt = torch.tensor(X_scaled, dtype=torch.float32)
     yt = torch.tensor(y,        dtype=torch.long)
@@ -284,7 +286,7 @@ def cv_accuracy(X: np.ndarray, y: np.ndarray, model_name: str) -> float:
 
 
 def kan_cv_accuracy(X: np.ndarray, y: np.ndarray) -> float:
-    """5-fold CV accuracy for KAN on given feature matrix."""
+    """10-fold CV accuracy for KAN on given feature matrix."""
     in_dim = X.shape[1]
     arch   = [in_dim, max(4, in_dim // 2), 2]
     skf    = StratifiedKFold(n_splits=N_FOLDS_PRUNE, shuffle=True, random_state=SEED)

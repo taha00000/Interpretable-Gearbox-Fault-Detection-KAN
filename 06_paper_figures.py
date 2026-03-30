@@ -161,7 +161,7 @@ def generate_confusion_matrices(df, W=PRIMARY_W):
         import copy
         from sklearn.model_selection import train_test_split
 
-        arch = [40, 20, 2]
+        arch = [X.shape[1], X.shape[1] // 2, 2]
         for tag, ModelClass, use_closure in [("KAN", KANModel, True), ("MLP", None, False)]:
             all_y_true, all_y_pred = [], []
             for tr, te in skf.split(X, y):

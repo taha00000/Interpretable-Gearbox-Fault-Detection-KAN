@@ -6,13 +6,16 @@ Sliding non-overlapping window feature extraction pipeline.
 For each window size W in {300, 400, 500, 600, 700, 800}, this script:
   1. Reads every healthy and broken-tooth CSV from the Gearbox Dataset folder.
   2. Applies a non-overlapping window of size W to each of the 4 sensor channels.
-  3. Extracts 10 statistical features per sensor (40 total) for each window.
+  3. Extracts 11 statistical features per sensor (44 total) for each window.
   4. Appends the load value and binary class label (0=healthy, 1=faulty).
   5. Saves the resulting tabular dataset to data/processed/features_W<W>.csv.
 
-Statistical features extracted per sensor window:
+Statistical features extracted per sensor window (11 total):
   Mean, RMS, Standard Deviation, Variance, Skewness, Kurtosis,
-  Peak-to-Peak (P2P), Crest Factor, Shape Factor, Impulse Factor
+  Peak-to-Peak (P2P), Crest Factor, Shape Factor, Margin Factor, Impulse Factor
+
+  Margin Factor = max(|x|) / mean(sqrt(|x|))^2
+  (same definition as Hassan et al., Machines 2026)
 """
 
 import os
@@ -30,16 +33,16 @@ WINDOWS     = [300, 400, 500, 600, 700, 800]
 
 FEATURE_NAMES = [
     "mean", "rms", "std", "var", "skew",
-    "kurt", "p2p", "crest", "shape", "impulse"
+    "kurt", "p2p", "crest", "shape", "margin", "impulse"
 ]
 
 
 # ── Feature extraction ────────────────────────────────────────────────────────
 def extract_features(window: np.ndarray) -> np.ndarray:
     """
-    Extract 10 statistical features from a (W, 4) window array.
-    Returns a 1-D array of length 40 (10 features × 4 sensors),
-    ordered as: [S1_feat1, ..., S1_feat10, S2_feat1, ..., S4_feat10].
+    Extract 11 statistical features from a (W, 4) window array.
+    Returns a 1-D array of length 44 (11 features × 4 sensors),
+    ordered as: [S1_feat1, ..., S1_feat11, S2_feat1, ..., S4_feat11].
     """
     eps = 1e-10
     mean_v  = np.mean(window, axis=0)
@@ -53,18 +56,21 @@ def extract_features(window: np.ndarray) -> np.ndarray:
     p2p_v   = max_v - min_v
     maxabs  = np.max(np.abs(window), axis=0)
     meanabs = np.mean(np.abs(window), axis=0)
+    meansqrt = np.mean(np.sqrt(np.abs(window)), axis=0)
 
-    rms_s    = np.where(rms_v == 0,     eps, rms_v)
-    mabs_s   = np.where(meanabs == 0,   eps, meanabs)
+    rms_s     = np.where(rms_v == 0,      eps, rms_v)
+    mabs_s    = np.where(meanabs == 0,    eps, meanabs)
+    msqrt_s   = np.where(meansqrt == 0,   eps, meansqrt)
 
     crest_v   = maxabs / rms_s
     shape_v   = rms_v  / mabs_s
+    margin_v  = maxabs / (msqrt_s ** 2)   # Margin Factor (Hassan et al.)
     impulse_v = maxabs / mabs_s
 
-    # Stack → (10, 4) → flatten → (40,)  [sensor-major order]
+    # Stack → (11, 4) → flatten → (44,)  [sensor-major order]
     features = np.vstack((
         mean_v, rms_v, std_v, var_v, skew_v,
-        kurt_v, p2p_v, crest_v, shape_v, impulse_v
+        kurt_v, p2p_v, crest_v, shape_v, margin_v, impulse_v
     ))
     return features.T.flatten()
 
@@ -120,6 +126,8 @@ def main():
     broken_files  = sorted(glob.glob(os.path.join(DATASET_DIR, "Broken Tooth", "*.csv")))
 
     print(f"Found {len(healthy_files)} healthy and {len(broken_files)} broken-tooth files.")
+    print(f"Extracting {len(FEATURE_NAMES)} features per sensor × 4 sensors = "
+          f"{len(FEATURE_NAMES) * 4} features per sample.")
 
     file_info = (
         [(f, 0, get_load(f)) for f in healthy_files] +
@@ -127,7 +135,7 @@ def main():
     )
 
     for W in WINDOWS:
-        print(f"\nProcessing window size W = {W} samples ({W / 20:.0f} ms)…")
+        print(f"\nProcessing window size W = {W} samples ({W / 50000 * 1000:.1f} ms @ 50 kHz)…")
         all_rows = []
         for filepath, label, load in file_info:
             all_rows.extend(process_file(filepath, label, load, W))
@@ -142,6 +150,7 @@ def main():
               f"({n_healthy} healthy / {n_faulty} faulty) → {out_path}")
 
     print("\nFeature extraction complete.")
+    print(f"Feature columns: {COL_NAMES[:5]} … ({len(COL_NAMES)} total incl. load, label)")
 
 
 if __name__ == "__main__":

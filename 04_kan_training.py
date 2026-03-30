@@ -2,10 +2,13 @@
 04_kan_training.py
 ------------------
 Trains and benchmarks two neural architectures against each other:
-  - KAN  [40 -> 20 -> 2]  -- cubic B-spline edges (efficient_kan implementation)
-  - MLP  [40 -> 20 -> 2]  -- ReLU activations, equivalent parameter budget
+  - KAN  [N -> N//2 -> 2]  -- cubic B-spline edges (efficient_kan implementation)
+  - MLP  [N -> N//2 -> 2]  -- ReLU activations, equivalent parameter budget
 
-Both are evaluated under identical 5-fold stratified cross-validation with
+N is the number of input features, determined dynamically from the dataset
+(currently 44: 11 features x 4 sensors, matching Hassan et al. 2026).
+
+Both are evaluated under identical 10-fold stratified cross-validation with
 MinMax-scaled features, using the same random seed and fold splits as the
 baseline classifiers in 03_baseline_ml.py.
 
@@ -36,7 +39,6 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-# Import efficient_kan (local folder takes precedence over installed package)
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "efficient_kan"))
 from efficient_kan import KAN
@@ -52,14 +54,14 @@ WINDOWS   = [300, 400, 500, 600, 700, 800]
 SAVE_MODEL_FOR_W = 600   # window size whose best-fold model is saved for XAI
 
 # -- Hyper-parameters ----------------------------------------------------------
-ARCHITECTURE = [40, 20, 2]
+# Architecture is set dynamically based on input feature count (see evaluate_window)
 GRID_SIZE    = 5
 SPLINE_ORDER = 3
 EPOCHS       = 50
 LR           = 1e-3
 BATCH_SIZE   = 512
 PATIENCE     = 10
-N_FOLDS      = 5
+N_FOLDS      = 10    # matches Hassan et al. 2026 (10-fold CV)
 SEED         = 42
 
 
@@ -95,9 +97,9 @@ def train_model(model, X_tr, y_tr, X_val, y_val, X_te, y_te,
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
     criterion = nn.CrossEntropyLoss()
 
-    best_val  = float("inf")
-    best_state= None
-    patience  = 0
+    best_val   = float("inf")
+    best_state = None
+    patience   = 0
 
     for _ in range(EPOCHS):
         model.train()
@@ -150,6 +152,11 @@ def evaluate_window(filepath: str, W: int, save_kan_model: bool = False):
     X  = df.drop(columns=["label", "load"]).values
     y  = df["label"].values
 
+    # Dynamic architecture: [N_features -> N_features//2 -> 2]
+    n_features = X.shape[1]
+    architecture = [n_features, n_features // 2, 2]
+    print(f"  Architecture: {architecture}")
+
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
     kan_buf = {k: [] for k in ("acc", "prec", "rec", "f1")}
     mlp_buf = {k: [] for k in ("acc", "prec", "rec", "f1")}
@@ -174,7 +181,7 @@ def evaluate_window(filepath: str, W: int, save_kan_model: bool = False):
         X_te_s = scaler.transform(X_te)
 
         # -- KAN ---------------------------------------------------------------
-        kan = KAN(layers_hidden=ARCHITECTURE,
+        kan = KAN(layers_hidden=architecture,
                   grid_size=GRID_SIZE, spline_order=SPLINE_ORDER)
         acc_k, prec_k, rec_k, f1_k, kan = train_model(
             kan, X_tr, y_tr, X_val, y_val, X_te_s, y_te, use_closure=True)
@@ -195,7 +202,7 @@ def evaluate_window(filepath: str, W: int, save_kan_model: bool = False):
                               scaler.scale_.copy())
 
         # -- MLP ---------------------------------------------------------------
-        mlp = MLP(ARCHITECTURE)
+        mlp = MLP(architecture)
         acc_m, prec_m, rec_m, f1_m, _ = train_model(
             mlp, X_tr, y_tr, X_val, y_val, X_te_s, y_te, use_closure=False)
 
@@ -207,7 +214,7 @@ def evaluate_window(filepath: str, W: int, save_kan_model: bool = False):
             "Recall": rec_m * 100, "F1": f1_m * 100,
         })
 
-        print(f"  Fold {fold}: KAN {acc_k*100:.2f}%  |  MLP {acc_m*100:.2f}%",
+        print(f"  Fold {fold:2d}: KAN {acc_k*100:.2f}%  |  MLP {acc_m*100:.2f}%",
               flush=True)
 
     if save_kan_model and best_kan_model is not None:
@@ -217,11 +224,11 @@ def evaluate_window(filepath: str, W: int, save_kan_model: bool = False):
         np.save(os.path.join(MODEL_DIR,
                              f"kan_best_W{SAVE_MODEL_FOR_W}_scaler.npy"),
                 np.array(best_scaler, dtype=object))
-        print(f"  [Saved] Best-fold KAN model -> model/kan_best_W{SAVE_MODEL_FOR_W}.pt")
+        print(f"  [Saved] Best-fold KAN -> model/kan_best_W{SAVE_MODEL_FOR_W}.pt")
 
-    kan_avg = {k: np.mean(v) * 100 for k, v in kan_buf.items()}
+    kan_avg = {k: np.mean(v) * 100       for k, v in kan_buf.items()}
     kan_std = {k + "_std": np.std(v) * 100 for k, v in kan_buf.items()}
-    mlp_avg = {k: np.mean(v) * 100 for k, v in mlp_buf.items()}
+    mlp_avg = {k: np.mean(v) * 100       for k, v in mlp_buf.items()}
     mlp_std = {k + "_std": np.std(v) * 100 for k, v in mlp_buf.items()}
     return {**kan_avg, **kan_std}, {**mlp_avg, **mlp_std}, per_fold_rows
 
