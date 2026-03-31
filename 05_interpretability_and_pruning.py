@@ -371,7 +371,7 @@ def run_pruning_validation(X: np.ndarray, y: np.ndarray,
     surv_df.to_csv(os.path.join(out_dir, f"pruned_survivors_W{W}.csv"), index=False)
 
     # Benchmark all classifiers
-    print("  Running 5-fold CV on full (40) vs pruned feature sets…")
+    print(f"  Running {N_FOLDS_PRUNE}-fold CV on full ({in_dim}) vs pruned feature sets…")
     rows = []
     model_names = list(get_baseline_models().keys()) + ["KAN"]
 
