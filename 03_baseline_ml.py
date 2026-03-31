@@ -39,7 +39,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data", "processed")
 OUT_DIR  = os.path.join(BASE_DIR, "results")
 WINDOWS  = [300, 400, 500, 600, 700, 800]
-N_FOLDS  = 10
+N_FOLDS  = 5
 SEED     = 42
 
 

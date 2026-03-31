@@ -87,7 +87,7 @@ SEED         = 42
 
 # Pruning: fraction of features to keep (top-K by L1 norm)
 PRUNE_THRESHOLD = 0.05     # features with importance < 5 % of max are pruned
-N_FOLDS_PRUNE   = 10       # matches Hassan et al. 2026 (10-fold CV)
+N_FOLDS_PRUNE   = 5        # 5-fold CV (original Opus plan protocol)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -371,7 +371,7 @@ def run_pruning_validation(X: np.ndarray, y: np.ndarray,
     surv_df.to_csv(os.path.join(out_dir, f"pruned_survivors_W{W}.csv"), index=False)
 
     # Benchmark all classifiers
-    print(f"  Running {N_FOLDS_PRUNE}-fold CV on full ({in_dim}) vs pruned feature sets…")
+    print(f"  Running {N_FOLDS_PRUNE}-fold CV on full ({len(feature_names)}) vs pruned feature sets…")
     rows = []
     model_names = list(get_baseline_models().keys()) + ["KAN"]
 

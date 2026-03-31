@@ -61,7 +61,7 @@ EPOCHS       = 50
 LR           = 1e-3
 BATCH_SIZE   = 512
 PATIENCE     = 10
-N_FOLDS      = 10    # matches Hassan et al. 2026 (10-fold CV)
+N_FOLDS      = 5     # 5-fold CV (original Opus plan protocol)
 SEED         = 42
 
 
