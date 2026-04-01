@@ -29,7 +29,7 @@ from scipy.stats import skew, kurtosis
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 DATASET_DIR = os.path.join(BASE_DIR, "Gearbox Dataset")
 OUT_DIR     = os.path.join(BASE_DIR, "data", "processed")
-WINDOWS     = [300, 400, 500, 600, 700, 800]
+WINDOWS     = [300, 400, 500, 600, 700, 800, 900, 1000]
 
 FEATURE_NAMES = [
     "mean", "rms", "std", "var", "skew",
