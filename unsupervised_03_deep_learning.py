@@ -22,7 +22,7 @@ from sklearn.metrics import roc_auc_score, precision_recall_fscore_support, pair
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data", "unsupervised")
-RESULTS_DIR = os.path.join(BASE_DIR, "results_unsupervised")
+RESULTS_DIR = os.path.join(BASE_DIR, "results_unsupervised_pruned")
 WINDOWS = [300, 400, 500, 600, 700, 800, 900, 1000]
 
 class Autoencoder(nn.Module):
@@ -102,7 +102,7 @@ def main():
         val_df = pd.read_csv(val_path)
         test_df = pd.read_csv(test_path)
         
-        feat_cols = [c for c in train_df.columns if c not in ['load', 'label']]
+        feat_cols = ["S1_rms", "S1_std", "S1_var", "S4_mean", "S2_shape", "S2_skew", "S1_shape", "S1_p2p", "S4_shape", "S3_mean", "S2_std", "S2_rms", "S3_shape"]
         X_train, y_train = train_df[feat_cols].values, train_df['label'].values
         X_val, y_val = val_df[feat_cols].values, val_df['label'].values
         X_test, y_test = test_df[feat_cols].values, test_df['label'].values

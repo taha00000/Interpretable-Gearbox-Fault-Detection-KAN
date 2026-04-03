@@ -23,7 +23,7 @@ from sklearn.metrics import roc_auc_score, precision_recall_fscore_support
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data", "unsupervised")
-RESULTS_DIR = os.path.join(BASE_DIR, "results_unsupervised")
+RESULTS_DIR = os.path.join(BASE_DIR, "results_unsupervised_pruned")
 WINDOWS = [300, 400, 500, 600, 700, 800, 900, 1000]
 
 def eval_model(y_true, scores, threshold):
@@ -102,7 +102,7 @@ def main():
         val_df = pd.read_csv(os.path.join(DATA_DIR, f"val_W{W}.csv"))
         test_df = pd.read_csv(os.path.join(DATA_DIR, f"test_W{W}.csv"))
         
-        fcols = [c for c in train_df.columns if c not in ['load', 'label']]
+        fcols = ["S1_rms", "S1_std", "S1_var", "S4_mean", "S2_shape", "S2_skew", "S1_shape", "S1_p2p", "S4_shape", "S3_mean", "S2_std", "S2_rms", "S3_shape"]
         scaler = StandardScaler()
         X_tr = scaler.fit_transform(train_df[fcols].values)
         X_va, X_te = scaler.transform(val_df[fcols].values), scaler.transform(test_df[fcols].values)

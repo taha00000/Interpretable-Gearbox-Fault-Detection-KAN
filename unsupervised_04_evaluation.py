@@ -15,7 +15,7 @@ import seaborn as sns
 from sklearn.metrics import roc_curve, auc
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-RESULTS_DIR = os.path.join(BASE_DIR, "results_unsupervised")
+RESULTS_DIR = os.path.join(BASE_DIR, "results_unsupervised_pruned")
 WINDOWS = [300, 400, 500, 600, 700, 800, 900, 1000]
 
 def main():
