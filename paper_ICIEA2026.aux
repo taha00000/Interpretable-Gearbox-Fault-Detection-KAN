@@ -1,0 +1,100 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{lei2020}
+\citation{liu2024kan}
+\citation{liu2024kan,vaca2024kolmogorov}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{I}{1}{Introduction}{section.1}{}}
+\citation{deeponeclassref}
+\citation{teacherstudent}
+\citation{patchcoreref}
+\citation{liu2024kan}
+\citation{vaca2024kolmogorov}
+\citation{cranmer2020discovering}
+\citation{spectraquest}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{II}{2}{Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Unsupervised Fault Detection for Rotating Machinery}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Kolmogorov--Arnold Networks}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Symbolic Regression and Model Distillation}{2}{subsection.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces End-to-end pipeline. Healthy vibration data are mapped to 44 statistical features, compressed by a [44$\to $22$\to $8$\to $22$\to $44] KAN autoencoder, then each surviving encoder edge is distilled into a symbolic primitive. Anomalies violate both the reconstruction and the symbolic health equations.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:pipeline}{{1}{2}{End-to-end pipeline. Healthy vibration data are mapped to 44 statistical features, compressed by a [44$\to $22$\to $8$\to $22$\to $44] KAN autoencoder, then each surviving encoder edge is distilled into a symbolic primitive. Anomalies violate both the reconstruction and the symbolic health equations}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}Methodology}{2}{section.3}\protected@file@percent }
+\newlabel{sec:method}{{III}{2}{Methodology}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Feature Extraction}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}KAN Autoencoder Architecture}{2}{subsection.3.2}\protected@file@percent }
+\citation{spectraquest}
+\citation{patchcoreref}
+\citation{deeponeclassref}
+\citation{teacherstudent}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Edge Pruning}{3}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Per-Edge Symbolic Regression}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-E}}Health Equation Composition}{3}{subsection.3.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-F}}Anomaly Scoring}{3}{subsection.3.6}\protected@file@percent }
+\newlabel{eq:mahal}{{5}{3}{Anomaly Scoring}{equation.3.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Setup}{3}{section.4}\protected@file@percent }
+\newlabel{sec:experiments}{{IV}{3}{Experimental Setup}{section.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Distribution of BIC-selected symbolic forms across 839 surviving encoder edges.}}{4}{table.1}\protected@file@percent }
+\newlabel{tab:symdist}{{I}{4}{Distribution of BIC-selected symbolic forms across 839 surviving encoder edges}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Per-edge $R^2$ statistics of the symbolic surrogates.}}{4}{table.2}\protected@file@percent }
+\newlabel{tab:r2}{{II}{4}{Per-edge $R^2$ statistics of the symbolic surrogates}{table.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Results}{4}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{V}{4}{Results}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Symbolisation Quality}{4}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Anomaly Detection}{4}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Benchmark Against Eighteen Methods}{4}{subsection.5.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces AUC of the seven KAN-AE scores at $W{=}1000$ on the SpectraQuest broken-tooth benchmark. Results are mean\,$\pm $\,std over $N{=}10$ independent seeds (different train/test splits and model initialisations).}}{4}{table.3}\protected@file@percent }
+\newlabel{tab:scores}{{III}{4}{AUC of the seven KAN-AE scores at $W{=}1000$ on the SpectraQuest broken-tooth benchmark. Results are mean\,$\pm $\,std over $N{=}10$ independent seeds (different train/test splits and model initialisations)}{table.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Fault Localisation via Equation Violation}{4}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Ablations}{4}{subsection.5.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces ROC-AUC (\%) on the SpectraQuest benchmark across eight window sizes. The top block lists classical unsupervised detectors; the middle block lists post-hoc XAI-weighted scores; the bottom block lists the proposed KAN-symbolic scores. All $W{=}1000$ entries show mean\,$\pm $\,std over $N{=}10$ independent seeds (each seed changes the train/test split and model initialisation).}}{5}{table.4}\protected@file@percent }
+\newlabel{tab:bench}{{IV}{5}{ROC-AUC (\%) on the SpectraQuest benchmark across eight window sizes. The top block lists classical unsupervised detectors; the middle block lists post-hoc XAI-weighted scores; the bottom block lists the proposed KAN-symbolic scores. All $W{=}1000$ entries show mean\,$\pm $\,std over $N{=}10$ independent seeds (each seed changes the train/test split and model initialisation)}{table.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Fault localisation via symbolic equation violation. \textbf  {(a)}\nobreakspace  {}Per-equation fault ratio $\rho _j$ for all 22 health equations, sorted ascending; bars are coloured by the dominant sensor channel (S1--S4). The three most violated equations are annotated with their leading feature and ratio value. \textbf  {(b)}\nobreakspace  {}Stacked sensor-weight breakdown for the top-8 violated equations, showing the fraction of total edge-coefficient magnitude attributable to each channel. $z_6$ ($\rho {=}16.2\times $) is dominated by S1 statistics, confirming that the broken tooth most strongly excites the accelerometer physically nearest to the faulty gear.}}{5}{figure.2}\protected@file@percent }
+\newlabel{fig:fault_localisation}{{2}{5}{Fault localisation via symbolic equation violation. \textbf {(a)}~Per-equation fault ratio $\rho _j$ for all 22 health equations, sorted ascending; bars are coloured by the dominant sensor channel (S1--S4). The three most violated equations are annotated with their leading feature and ratio value. \textbf {(b)}~Stacked sensor-weight breakdown for the top-8 violated equations, showing the fraction of total edge-coefficient magnitude attributable to each channel. $z_6$ ($\rho {=}16.2\times $) is dominated by S1 statistics, confirming that the broken tooth most strongly excites the accelerometer physically nearest to the faulty gear}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Reconstruction AUC (Score A) as a function of KAN autoencoder bottleneck width $B$. Narrow bottlenecks underfit, while excessive width overfits the healthy manifold and degrades anomaly detection.}}{5}{figure.3}\protected@file@percent }
+\newlabel{fig:ablation_width}{{3}{5}{Reconstruction AUC (Score A) as a function of KAN autoencoder bottleneck width $B$. Narrow bottlenecks underfit, while excessive width overfits the healthy manifold and degrades anomaly detection}{figure.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Computational efficiency at $W{=}1000$ (seed\nobreakspace  {}42, CPU only). \emph  {Size}: serialised KB for classical methods; trainable parameter count for neural methods; number of stored symbolic scalars for KAN-AE-SymRecon. \emph  {Inf.\ time}: median per-sample time (ms) over 20 timed runs, measured in C++ via \texttt  {std::chrono::high\_resolution\_clock} (LibTorch for neural/KAN models; Eigen for symbolic and classical). AUC: mean\,$\pm $\,std over $N{=}10$ seeds.}}{6}{table.5}\protected@file@percent }
+\newlabel{tab:efficiency}{{V}{6}{Computational efficiency at $W{=}1000$ (seed~42, CPU only). \emph {Size}: serialised KB for classical methods; trainable parameter count for neural methods; number of stored symbolic scalars for KAN-AE-SymRecon. \emph {Inf.\ time}: median per-sample time (ms) over 20 timed runs, measured in C++ via \texttt {std::chrono::high\_resolution\_clock} (LibTorch for neural/KAN models; Eigen for symbolic and classical). AUC: mean\,$\pm $\,std over $N{=}10$ seeds}{table.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-F}}Computational Efficiency}{6}{subsection.5.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion}{6}{section.6}\protected@file@percent }
+\newlabel{sec:discussion}{{VI}{6}{Discussion}{section.6}{}}
+\bibstyle{IEEEtran}
+\bibcite{lei2020}{1}
+\bibcite{liu2024kan}{2}
+\bibcite{vaca2024kolmogorov}{3}
+\bibcite{IsolationForest}{4}
+\bibcite{OCSVM}{5}
+\bibcite{LOF}{6}
+\bibcite{patchcoreref}{7}
+\bibcite{autoencref}{8}
+\bibcite{vaeref}{9}
+\bibcite{deeponeclassref}{10}
+\bibcite{teacherstudent}{11}
+\bibcite{ssldaeref}{12}
+\bibcite{shapref}{13}
+\bibcite{LIMEref}{14}
+\bibcite{Mahalanobis1ref}{15}
+\bibcite{Mahalanobis2ref}{16}
+\bibcite{Mahalanobis3ref}{17}
+\bibcite{cranmer2020discovering}{18}
+\bibcite{spectraquest}{19}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Conclusion}{7}{section.7}\protected@file@percent }
+\newlabel{sec:conclusion}{{VII}{7}{Conclusion}{section.7}{}}
+\@writefile{toc}{\contentsline {section}{References}{7}{section*.13}\protected@file@percent }
+\gdef \@abspage@last{7}
