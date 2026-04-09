@@ -1,0 +1,126 @@
+Multi-seed evaluation  W=1000  N_seeds=10
+New methods: baselines (9) + XAI (2) + SR
+======================================================================
+Loaded existing KAN-AE results from /home/suleiman/Ireland/Interpretable-Gearbox-Fault-Detection-KAN/results_kan_symbolic/multi_seed_auc.csv
+  Seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 42]
+  Scores: ['A', 'B', 'C', 'D', 'E', 'M', 'F', 'n_edges']
+
+──────────────────────────────────────────────────────────────────────
+Seed 42
+    baselines done.
+    KAN-AE trained.
+    SR=0.9751
+    SHAP=0.9621
+    LIME=0.9833
+  → IF=0.8699  SVM=0.9825  LOF=0.9928  AE=0.8498  SR=0.9751  SHAP=0.9621  LIME=0.9833  (277s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  0
+    baselines done.
+    KAN-AE trained.
+    SR=0.9726
+    SHAP=0.9467
+    LIME=0.9824
+  → IF=0.8647  SVM=0.9881  LOF=0.9954  AE=0.8757  SR=0.9726  SHAP=0.9467  LIME=0.9824  (282s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  1
+    baselines done.
+    KAN-AE trained.
+    SR=0.9861
+    SHAP=0.9439
+    LIME=0.9847
+  → IF=0.8359  SVM=0.9888  LOF=0.9948  AE=0.8703  SR=0.9861  SHAP=0.9439  LIME=0.9847  (322s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  2
+    baselines done.
+    KAN-AE trained.
+    SR=0.9863
+    SHAP=0.9762
+    LIME=0.9933
+  → IF=0.8882  SVM=0.9879  LOF=0.9949  AE=0.9259  SR=0.9863  SHAP=0.9762  LIME=0.9933  (260s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  3
+    baselines done.
+    KAN-AE trained.
+    SR=0.9783
+    SHAP=0.9439
+    LIME=0.9730
+  → IF=0.7901  SVM=0.9843  LOF=0.9960  AE=0.8978  SR=0.9783  SHAP=0.9439  LIME=0.9730  (272s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  4
+    baselines done.
+    KAN-AE trained.
+    SR=0.9658
+    SHAP=0.9458
+    LIME=0.9777
+  → IF=0.8814  SVM=0.9857  LOF=0.9912  AE=0.8941  SR=0.9658  SHAP=0.9458  LIME=0.9777  (279s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  5
+    baselines done.
+    KAN-AE trained.
+    SR=0.9826
+    SHAP=0.9658
+    LIME=0.9873
+  → IF=0.8878  SVM=0.9858  LOF=0.9925  AE=0.8905  SR=0.9826  SHAP=0.9658  LIME=0.9873  (250s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  6
+    baselines done.
+    KAN-AE trained.
+    SR=0.9816
+    SHAP=0.9645
+    LIME=0.9799
+  → IF=0.9047  SVM=0.9791  LOF=0.9895  AE=0.8887  SR=0.9816  SHAP=0.9645  LIME=0.9799  (252s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  7
+    baselines done.
+    KAN-AE trained.
+    SR=0.9823
+    SHAP=0.9517
+    LIME=0.9909
+  → IF=0.8329  SVM=0.9918  LOF=0.9977  AE=0.8812  SR=0.9823  SHAP=0.9517  LIME=0.9909  (219s)
+
+──────────────────────────────────────────────────────────────────────
+Seed  8
+    baselines done.
+    KAN-AE trained.
+    SR=0.9667
+    SHAP=0.9348
+    LIME=0.9688
+  → IF=0.8715  SVM=0.9816  LOF=0.9927  AE=0.9068  SR=0.9667  SHAP=0.9348  LIME=0.9688  (236s)
+
+======================================================================
+SUMMARY  N=10 seeds  W=1000  total_time=2649s
+======================================================================
+Method                      Mean       Std       Min       Max
+──────────────────────  ────────  ────────  ────────  ────────
+  IsolationForest         0.8627    0.0340    0.7901    0.9047
+  OC-SVM                  0.9856    0.0038    0.9791    0.9918
+  LOF                     0.9937    0.0025    0.9895    0.9977
+  PatchCore               0.9725    0.0071    0.9619    0.9814
+  Autoencoder             0.8881    0.0208    0.8498    0.9259
+  VAE                     0.8487    0.0100    0.8363    0.8687
+  DeepSVDD                0.9070    0.0909    0.7106    0.9945
+  TeacherStudent          0.9162    0.0395    0.8615    0.9761
+  SSL-DAE                 0.9430    0.0079    0.9304    0.9556
+  SHAP-Weighted           0.9535    0.0129    0.9348    0.9762
+  LIME-Weighted           0.9821    0.0076    0.9688    0.9933
+  A                       0.9642    0.0157    0.9426    0.9845
+  B                       0.9026    0.0558    0.7898    0.9814
+  C                       0.9716    0.0151    0.9479    0.9890
+  D                       0.9403    0.0422    0.8466    0.9908
+  E                       0.9716    0.0146    0.9487    0.9887
+  M                       0.9891    0.0069    0.9786    0.9995
+  F                       0.9824    0.0097    0.9668    0.9930
+  SR                      0.9777    0.0075    0.9658    0.9863
+
+Saved →
+  /home/suleiman/Ireland/Interpretable-Gearbox-Fault-Detection-KAN/results_kan_symbolic/multi_seed_auc_full.csv
+  /home/suleiman/Ireland/Interpretable-Gearbox-Fault-Detection-KAN/results_kan_symbolic/multi_seed_summary_full.csv
+  /home/suleiman/Ireland/Interpretable-Gearbox-Fault-Detection-KAN/results_kan_symbolic/multi_seed_eval.log
