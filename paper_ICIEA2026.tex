@@ -41,13 +41,13 @@ At test time, deviations from these equations serve as anomaly
 scores: a Mahalanobis distance on equation residuals achieves
 AUC~$0.9891\pm0.0069$ (mean\,$\pm$\,std, $N{=}10$ seeds) on the
 SpectraQuest broken-tooth benchmark, surpassing SHAP-weighted
-reconstruction ($0.9535\pm0.0129$) and all deep baselines while
+reconstruction ($0.9535\pm0.0129$) and most deep baselines while
 remaining second only to LOF among all eighteen methods compared.
 A fully symbolic variant---which discards the neural network
 entirely at inference---runs in 0.018\,ms per sample
 ($200{\times}$ faster than SHAP) and still attains AUC~$0.9777\pm0.0075$. 
 Critically, violated equations attribute faults to specific
-sensor-level statistics (e.g., S1\_rms, S1\_kurtosis) rather than
+sensor-level statistics (e.g., S1\_rms) rather than
 returning a global feature ranking as SHAP and LIME do.
 \end{abstract}
 
@@ -69,14 +69,14 @@ detect before they manifest as vibration anomalies~\cite{lei2020}.
 
 The standard diagnostic paradigm---train a supervised classifier on
 matched healthy/faulty recordings---is almost never achievable in
-practice. Faults are intentionally rare events; inducing them for data
+practice. Faults are rare events; inducing them for data
 collection destroys the equipment under test; and the vibration signature
 of a given fault depends heavily on load level, shaft speed, and machine
 age, requiring exhaustive experimental coverage. Practitioners are left
-with abundant healthy operational data and almost no labeled fault data.
+with abundant healthy data and minimal labeled fault data.
 
 Condition-based maintenance of industrial gearboxes relies on
-vibration analysis to catch incipient failures before catastrophic
+vibration analysis to catch incipient failures before
 breakdown. Modern data-driven detectors---autoencoders,
 variational autoencoders, one-class classifiers, patch-based
 memory networks---achieve near-perfect ROC-AUC on benchmark
@@ -87,7 +87,7 @@ assigning per-feature importance weights, yet (i) their explanations
 require running a surrogate model at inference, (ii) they are global
 averages that do not identify \emph{which structural relationship}
 was violated, and (iii) they cannot be deployed without the original
-neural network.
+neural network (NN).
 
 Kolmogorov--Arnold Networks (KANs) \cite{liu2024kan} recently
 re-introduced learnable B-spline activations on \emph{edges} rather
@@ -97,52 +97,38 @@ univariate function of one feature, KANs are naturally amenable to
 replaced by a human-readable mathematical primitive. Prior work
 on KANs has focused on supervised regression and classification
 in physics and PDE discovery \cite{liu2024kan,vaca2024kolmogorov};
-to our knowledge, none has exploited KAN splines for
-\emph{unsupervised symbolic health modelling} of rotating machinery.
+while one recent work applies KANs for time-series anomaly detection
+via forecasting residuals~\cite{kanad2025}, none has exploited KAN
+splines for \emph{unsupervised symbolic health modelling} of rotating machinery.
 
 This paper introduces the following
 novel contributions :
 
 \begin{enumerate}
 \item \textbf{Symbolic health equations from KAN autoencoders.}
-We show that a KAN autoencoder trained only on healthy vibration
-features learns per-edge activations that are almost perfectly
-symbolisable---$100\%$ of surviving edges reach $R^2>0.95$ (coefficient of determination) against
-a library of thirteen symbolic primitives, with mean
-$R^2 = 0.9999$. The resulting closed-form equations describe the
-healthy operating manifold of a gearbox with four accelerometer
-channels.
+A KAN autoencoder trained only on healthy vibration features learns
+per-edge activations that are almost perfectly symbolisable---$100\%$
+of surviving edges reach $R^2{>}0.95$ (coefficient of determination) against thirteen symbolic primitives
+(mean $R^2{=}0.9999$), yielding closed-form equations that describe
+the healthy operating manifold of a gearbox with 4 accelerometer channels.
 
 \item \textbf{Multiple symbolic anomaly scores.}
-We demonstrate that calibrated symbolic-violation and
-Mahalanobis-on-symbolic-residuals scores yield fully
-interpretable detectors (mean AUC $0.9026\pm0.0558$ and
-$0.9891\pm0.0069$ respectively over $N{=}10$ seeds).
-Furthermore, by symbolising the entire autoencoder into a stack of simple mathematical equations, we achieve a \emph{fully symbolic reconstruction} AUC of 0.9650. This completely discards the neural network at inference time, enabling an extremely lightweight and understandable deployability.
-Finally, a combined reconstruction + symbolic-violation
-detector achieves AUC $0.9716\pm0.0151$---surpassing
-the opaque reconstruction score ($0.9642\pm0.0157$) and the majority
-of unsupervised baselines including VAE, DeepSVDD,
-Teacher--Student distillation, and SSL-DAE.
+Calibrated symbolic-violation and Mahalanobis-on-symbolic-residuals
+scores yield fully interpretable detectors. Distilling the full
+autoencoder into closed-form equations produces a \emph{fully symbolic
+reconstruction} that discards the NN entirely at inference,
+surpassing the opaque reconstruction baseline and most deep unsupervised methods.
 
 \item \textbf{Equation-level fault localisation.}
-Because each symbolic equation references an explicit subset of
-sensor-level statistics, a \emph{per-equation violation ratio}
-identifies the dominant statistical features of the damaged
-channel(s) with no fault labels. On the SpectraQuest
-benchmark the most violated equation (ratio $16.19\times$
-healthy) is dominated by S1 statistics (S1\_mean, S1\_rms,
-S1\_std)---features of the accelerometer physically closest
-to the broken tooth.
+A \emph{per-equation violation ratio} identifies dominant statistical
+features of damaged channels without fault labels. On the SpectraQuest
+benchmark the most violated equation pinpoints accelerometer S1---physically
+closest to the broken tooth.
 
 \item \textbf{Principled ablation of symbolisability.}
-We show that the $L_1$+entropy spline regulariser of
-\texttt{efficient-kan} is the mechanism that drives high
-symbolisation quality: turning it off drops quality from $100\%$
-to $98.7\%$ and increases the surviving-edge count by $8.5\%$.
-A bottleneck sweep $B\!\in\!\{4,\ldots,12\}$ further establishes
-that $B=8$ is the sweet spot between reconstruction fidelity
-and parsimony.
+The $L_1$+entropy spline regulariser is the mechanism that drives
+symbolisation quality, and $B{=}8$ is identified as the optimal
+bottleneck between reconstruction fidelity and parsimony.
 \end{enumerate}
 
 The remainder of this paper is organised as follows.
@@ -159,14 +145,21 @@ directions for future work.
 \label{sec:related}
 
 \subsection{Unsupervised Fault Detection for Rotating Machinery}
-Classical unsupervised detectors for vibration data include
-Isolation Forest, One-Class SVM and Local Outlier Factor. Deep
-variants---autoencoders, variational autoencoders, Deep-SVDD
-\cite{deeponeclassref}, Teacher--Student distillation
-\cite{teacherstudent} and the patch-memory PatchCore
-\cite{patchcoreref}---currently dominate public benchmarks
+Vibration-based condition monitoring of rotating machinery has attracted
+extensive research, with recent advances comprehensively surveyed
+in \cite{cbmsurvey2025}. Classical unsupervised detectors ~\cite{IsolationForest, OCSVM, LOF} include IF, OC SVM and LOF. Deep
+variants~\cite{autoencref, vaeref, deeponeclassref, teacherstudent, patchcoreref} ---AE, VAE, Deep-SVDD, Teacher--Student, and PatchCore---currently dominate public benchmarks
 on bearing and gearbox datasets, but their decisions remain
-opaque.
+opaque. A recent comprehensive survey of interpretable fault
+diagnosis~\cite{ieeaccessinterp2024} distinguishes \emph{post-hoc}
+methods, which apply an explainer after training (SHAP, LIME), from
+\emph{ante-hoc} designs that are interpretable by construction; the
+present work belongs firmly to the latter category. The closest
+unsupervised baseline to our approach is Brito
+et al.~\cite{britoshaprm2022}, who combine OC SVM with SHAP
+for rotating-machinery fault detection; their explanations are
+post-hoc feature rankings that require a surrogate at inference
+and cannot identify which structural relationship was violated.
 
 \subsection{Kolmogorov--Arnold Networks}
 The KAN reformulation of Liu \emph{et al.}~\cite{liu2024kan}
@@ -179,9 +172,18 @@ to supervised fault classification of bearings and gearboxes
 applications of KANs are (i) \emph{supervised}, requiring
 labelled fault examples, and (ii) focus on classification
 accuracy rather than symbolic extraction.
+KAN-AD~\cite{kanad2025}, uses a KAN
+as a forecasting model and scores anomalies as residuals between
+predicted and observed values on clean data. Our work differs in
+three key respects: (i)~we use a KAN \emph{autoencoder} trained
+exclusively on healthy data, rather than a forecaster; (ii)~we
+subsequently distil the learned edge splines into closed-form
+symbolic health equations; and (iii)~anomaly scores are derived
+from violations of those equations, yielding explicit physical
+attribution that forecasting-residual scoring does not provide.
 
 \subsection{Symbolic Regression and Model Distillation}
-Symbolic regression with PySR, AI-Feynman, or eureqa has been
+Symbolic regression with PySR~\cite{cranmer2023pysr}, AI-Feynman, or eureqa has been
 used to distil scientific laws from deep networks
 \cite{cranmer2020discovering}. The novelty of the present work
 is to apply symbolic distillation \emph{edge-wise} to a
@@ -204,8 +206,7 @@ The proposed pipeline comprises five stages
 \centering
 \includegraphics[width=0.95\columnwidth]{Pipeline.png}
 \caption{End-to-end pipeline. Healthy vibration data are mapped
-to 44 statistical features, compressed by a
-[44$\to$22$\to$8$\to$22$\to$44] KAN autoencoder, then each
+to 44 statistical features, compressed by a KAN autoencoder, then each
 surviving encoder edge is distilled into a symbolic primitive.
 Anomalies violate both the reconstruction and the symbolic
 health equations.}
@@ -214,12 +215,9 @@ health equations.}
 
 \subsection{Feature Extraction}
 For each accelerometer channel $S_c,\;c\in\{1,2,3,4\}$ and each
-non-overlapping window of length $W$ samples, we compute eleven
-time-domain statistics: mean, RMS, standard deviation, variance,
-skewness, kurtosis, peak-to-peak, crest factor, shape factor,
-impulse factor (similar to Hassan et al. ~\cite{spectraquest}), and margin factor. This produces a feature vector
+non-overlapping window of length $W\in\{300,400,\ldots,1000\}$ samples, we compute eleven
+time-domain statistics similar to Hassan et al.~\cite{spectraquest}, in addition with margin factor. This produces a feature vector
 $\mathbf{x}\in\mathbb{R}^{44}$ per window.
-Eight window sizes $W\in\{300,400,\ldots,1000\}$ are evaluated.
 Features are scaled to $[0,1]$ with a \texttt{MinMaxScaler}
 fitted on the training-healthy split only to avoid leakage.
 
@@ -251,35 +249,28 @@ c_{ji} = \overline{|w^{\text{spl}}_{ji,\cdot}|}
 where $w^{\text{spl}}$ is the scaled spline coefficient tensor
 and $w^{\text{base}}$ is the residual linear weight. Edges with
 $c_{ji} < \alpha\,\max_{j',i'}c_{j'i'}$ are pruned
-($\alpha{=}0.05$). On our model 839 of 968 edges survive
-(86.7\%), with the most important features being S1\_kurt,
-S1\_margin, S1\_p2p and S4\_impulse.
+($\alpha{=}0.05$). On our model, 839 of 968 edges survive
+(86.7\%).
 
 \subsection{Per-Edge Symbolic Regression}
 For each surviving edge $(j,i)$ we sweep input feature $i$ over
 $[0,1]$ with all other features held at their scaled midpoint,
 and read off the corresponding spline contribution
 $y_{ji}(x)$ in 200 equi-spaced points. We then fit thirteen
-candidate symbolic forms---linear, quadratic, sigmoid, $\tanh$,
-Gaussian, hinge, $\sqrt{\cdot}$, $\log$, constant, exponential,
-power, rational, and $\sin$---via SciPy \texttt{curve\_fit}
-and select the winner by a two-stage BIC-based selection rule.
-First, the best polynomial fit among the polynomial candidates
-(linear, quadratic, constant) is determined. Then, any
-non-polynomial candidate whose $R^2$ exceeds the best polynomial
-by at least $0.05\%$ is considered; if any qualify, the one with
-the highest $R^2$ is selected, otherwise the BIC-best polynomial
-is retained. The BIC is computed as
+candidate symbolic forms---linear, quadratic, sigmoid, tanh,
+Gaussian, hinge, $\sqrt{\cdot}$, log, constant, exponential,
+power, rational, and sin---via SciPy \texttt{curve\_fit}
+and select the winner by a two-stage BIC-based selection rule:
+first the best polynomial (linear, quadratic, constant) is determined;
+then any non-polynomial candidate whose $R^2$ exceeds it by at least
+$0.05\%$ is preferred. The BIC is computed as
 \begin{equation}
 \text{BIC} = n\log(\text{MSE}) + k\log n,
 \end{equation}
-where $k$ is the number of free parameters. On our trained
-model, 824 of 839 surviving edges select the \emph{quadratic}
-form; eleven prefer $\sin$; two prefer \emph{hinge};
-one prefers \emph{sigmoid}; and one prefers $\tanh$. While the symbolic library includes 13 primitives, the dominance of quadratic forms most likely reflects two compounding modelling choices rather than a deep physical law: (i) all features are scaled to $[0,1]$, so every smooth univariate function is well-approximated by a low-degree polynomial on that compact domain (a direct consequence of the Weierstrass theorem), and (ii) the $L_1$+entropy regulariser suppresses high-curvature splines, which further biases the BIC comparison towards the simplest polynomial that fits. A physical ``energy-like'' interpretation of the quadratic coefficients is suggestive but not uniquely supported by the evidence; readers should treat the quadratic dominance primarily as a modelling artefact that happens to yield compact, easily deployable equations.
-The overall symbolisation quality (fraction of edges with
-$R^2{>}0.95$) is $100\%$ with mean $R^2{=}0.9999$.
-
+where $k$ is the number of free parameters. On our trained model,
+824 of 839 surviving edges select the \emph{quadratic} form; eleven
+ $\sin$; two \emph{hinge}; one \emph{sigmoid}; one
+$\tanh$. 
 \subsection{Health Equation Composition}
 Summing the symbolic edge functions entering each first-hidden-layer
 neuron yields a bank of 22 closed-form health equations
@@ -358,12 +349,7 @@ with all broken-tooth windows (1000 windows), yielding
 strictly no label leakage.
 
 \paragraph*{Baselines}
-We benchmark against nine unsupervised detectors: Isolation
-Forest, One-Class SVM, LOF, PatchCore~\cite{patchcoreref},
-a dense Autoencoder, a Variational Autoencoder,
-Deep-SVDD~\cite{deeponeclassref}, Teacher--Student
-distillation~\cite{teacherstudent} and a
-self-supervised Denoising AE. For interpretable baselines we
+We benchmark against nine unsupervised detectors and for interpretable baselines we
 additionally report \emph{SHAP-weighted} and
 \emph{LIME-weighted} versions of the KAN reconstruction
 error, where per-feature importance is derived with
@@ -385,38 +371,29 @@ final reconstruction MSE of $7.44\times 10^{-3}$ on healthy
 data. Pruning at $\alpha=0.05$ leaves 839 of 968 first-layer
 edges (86.7\%). Symbolic fitting selects the quadratic form for
 824 of 839 edges, with the remaining 15 split among $\sin$ (11),
-hinge (2), sigmoid (1), and $\tanh$ (1). The quadratic form dominates
-overwhelmingly, reflecting the smooth, nearly-parabolic shape
-that the $L_1$+entropy regulariser imposes on each
-B-spline around the operating midpoint. Across all 839 surviving
+hinge (2), sigmoid (1), and $\tanh$ (1) (see Section~\ref{sec:discussion} for an explanation of quadratic dominance). Across all 839 surviving
 edges the mean $R^2$ is $0.9999$ (std $0.0005$, minimum $0.9919$,
 median $1.0000$), and every edge meets the $R^2{>}0.95$ quality
 threshold---a $100\%$ symbolisation rate.
 
 \subsection{Anomaly Detection}
 Table~\ref{tab:scores} reports all seven KAN-based scores at
-$W{=}1000$ as mean\,$\pm$\,std over $N{=}10$ seeds.
-The raw reconstruction score (A) reaches
-AUC~$=0.9642\pm0.0157$. The calibrated symbolic equation-violation score
-(B), which applies joint-GAM calibration to the raw symbolic
-predictions, achieves AUC~$=0.9026\pm0.0558$, demonstrating
-that the symbolic surrogates capture substantial discriminative
-structure. The $R^2$-weighted tolerance-band score (D) further
-improves to $0.9403\pm0.0422$, and Mahalanobis whitening of the
-residuals (Score M, Eq.~\ref{eq:mahal}) yields the strongest
-result of \textbf{AUC~$=0.9891\pm0.0069$}---both the highest mean
-and the lowest variance across all proposed scores, confirming
-the Mahalanobis detector as the most reliable interpretable detector.
-The combined reconstruction + calibrated symbolic
-detector (Score~C) achieves AUC~$=0.9716\pm0.0151$,
-exceeding the opaque reconstruction score alone.
+$W{=}1000$ over $N{=}10$ seeds.
+The calibrated symbolic-violation score (B) confirms that symbolic
+surrogates capture substantial discriminative structure after joint-GAM
+calibration. The $R^2$-weighted tolerance-band score (D) refines
+this further, while Mahalanobis whitening of the residuals (M,
+Eq.~\ref{eq:mahal}) exploits the covariance structure of healthy
+residuals rather than treating each equation independently---yielding
+the highest mean AUC and lowest variance of all proposed scores.
+The combined reconstruction + symbolic-violation detector (C)
+exceeds the opaque reconstruction score alone, indicating partially
+orthogonal signal between the two components.
 
 \begin{table}[t]
 \centering
-\caption{AUC of the seven KAN-AE scores at $W{=}1000$ on the
-SpectraQuest broken-tooth benchmark. Results are mean\,$\pm$\,std
-over $N{=}10$ independent seeds (different train/test splits and
-model initialisations).}
+\caption{AUC (mean\,$\pm$\,std) of the seven KAN-AE scores at $W{=}1000$ on the
+SpectraQuest broken-tooth benchmark over 10 seeds}
 \label{tab:scores}
 \begin{tabular}{lccc}
 \toprule
@@ -434,25 +411,11 @@ F & $0.5\,\tilde{A}+0.5\,\tilde{M}$  & 0.9824 & $\pm$0.0097 \\
 \end{table}
 
 \subsection{Benchmark Against Eighteen Methods}
-Table~\ref{tab:bench} compares our scores against nine classic
-unsupervised detectors plus SHAP/LIME weighted reconstruction
-across all eight window sizes.
-Three observations follow.
-(i)~KAN-AE reconstruction (Score~A, $96.42\pm1.57\%$) is competitive with
-strong classic detectors and superior to all deep baselines
-(VAE $84.87\pm1.00\%$, DeepSVDD $90.70\pm9.09\%$, TeacherStudent $91.62\pm3.95\%$,
-SSL-DAE $94.30\pm0.79\%$, Autoencoder $88.81\pm2.08\%$).
-(ii)~The Mahalanobis symbolic-residual detector (Score~M,
-$\mathbf{98.91\pm0.69\%}$) surpasses OC-SVM ($98.56\pm0.38\%$),
-SHAP-weighted reconstruction ($95.35\pm1.29\%$), and all other deep
-baselines, while remaining fully interpretable through equation-level
-attribution; it is second only to LOF ($99.37\pm0.25\%$) over ten seeds.
-(iii)~Multi-seed evaluation reveals that the previously reported
-single-seed SHAP AUC of $99.49\%$ was an outlier: across ten seeds
-SHAP-weighted reconstruction averages $95.35\pm1.29\%$, which is
-\emph{below} Score~M, Score~F, and LIME-weighted reconstruction
-($98.21\pm0.76\%$), while still requiring expensive background
-sampling at inference with no equation-level attribution.
+Table~\ref{tab:bench} compares our scores against nine classical
+unsupervised detectors and SHAP/LIME-weighted reconstruction across
+all eight window sizes. Score~M surpasses most deep baselines and the
+SHAP/LIME-weighted scores while remaining fully interpretable through
+equation-level attribution.
 
 \begin{table*}[t]
 \centering
@@ -471,10 +434,10 @@ Method & W=300 & W=400 & W=500 & W=600 & W=700 & W=800 & W=900 & W=1000 \\
 \midrule
 Isolation Forest ~\cite{IsolationForest}     & 60.26 & 73.52 & 69.15 & 76.95 & 82.33 & 85.65 & 86.04 & $86.27\pm3.40$ \\
 OC-SVM  ~\cite{OCSVM}             & 77.22 & 82.07 & 87.91 & 88.89 & 94.12 & 96.55 & 98.88 & $98.56\pm0.38$ \\
-LOF     ~\cite{LOF}             & 88.15 & 91.15 & 92.96 & 94.04 & 95.96 & 97.74 & 99.40 & $99.37\pm0.25$ \\
+Local Outlier Factor     ~\cite{LOF}             & 88.15 & 91.15 & 92.96 & 94.04 & 95.96 & 97.74 & 99.40 & $99.37\pm0.25$ \\
 PatchCore    ~\cite{patchcoreref}        & 77.67 & 82.91 & 86.12 & 87.40 & 92.38 & 92.98 & 95.93 & $97.25\pm0.71$ \\
 Autoencoder   ~\cite{autoencref}       & 70.28 & 73.87 & 80.55 & 79.75 & 85.48 & 89.99 & 93.00 & $88.81\pm2.08$ \\
-VAE       ~\cite{vaeref}           & 59.46 & 64.36 & 65.28 & 69.63 & 76.67 & 79.43 & 82.67 & $84.87\pm1.00$ \\
+Variational Autoencoder       ~\cite{vaeref}           & 59.46 & 64.36 & 65.28 & 69.63 & 76.67 & 79.43 & 82.67 & $84.87\pm1.00$ \\
 Deep-SVDD  ~\cite{deeponeclassref}          & 76.46 & 60.00 & 78.14 & 65.18 & 71.53 & 75.31 & 79.75 & $90.70\pm9.09$ \\
 Teacher--Student ~\cite{teacherstudent}    & 83.55 & 75.41 & 83.65 & 86.57 & 91.21 & 97.54 & 92.55 & $91.62\pm3.95$ \\
 SSL-DAE      ~\cite{ssldaeref}        & 76.96 & 74.41 & 81.36 & 82.92 & 90.51 & 90.15 & 92.59 & $94.30\pm0.79$ \\
@@ -530,9 +493,7 @@ value.
 \textbf{(b)}~Stacked sensor-weight breakdown for the
 top-8 violated equations, showing the fraction of total
 edge-coefficient magnitude attributable to each channel.
-$z_6$ ($\rho{=}16.2\times$) is dominated by S1 statistics,
-confirming that the broken tooth most strongly excites the
-accelerometer physically nearest to the faulty gear.}
+$z_6$ ($\rho{=}16.2\times$) is dominated by S1 statistics}
 \label{fig:fault_localisation}
 \end{figure}
 
@@ -544,8 +505,6 @@ time across all methods. KAN-AE-SymRecon achieves the smallest footprint
 trainable parameters) and runs in 0.018\,ms per sample---$200{\times}$
 faster than SHAP-weighted reconstruction (3.67\,ms; 200 background samples) and $271{\times}$
 faster than LIME-weighted reconstruction (4.99\,ms; 300 perturbations).
-Score~M (Mahalanobis) is the fastest KAN-based detector at 0.005\,ms,
-while requiring no external explainer at inference.
 
 \begin{table}[t]
 \centering
@@ -555,8 +514,7 @@ while requiring no external explainer at inference.
   KAN-AE-SymRecon.
   \emph{Inf.\ time}: median per-sample time (ms) over 20 timed runs,
   measured in C++ via \texttt{std::chrono::high\_resolution\_clock}
-  (LibTorch for neural/KAN models; Eigen for symbolic and classical).
-  AUC: mean\,$\pm$\,std over $N{=}10$ seeds.}
+  (LibTorch for neural/KAN models; Eigen for symbolic and classical).}
 \label{tab:efficiency}
 \small
 \setlength{\tabcolsep}{3pt}
@@ -601,119 +559,97 @@ mechanism that drives both parsimony and symbolisability.
 \paragraph*{Bottleneck width.}
 Sweeping $B\!\in\!\{4,\ldots,12\}$ leaves symbolisation
 quality above $99\%$ in every case, while Score-A AUC
-peaks at $B{=}8$ (single-seed AUC~$=0.9671$; mean over
-$N{=}10$ seeds: $0.9642\pm0.0157$) with secondary optima at $B{=}6$
+peaks at $B{=}8$ (mean over $N{=}10$ seeds: $0.9642\pm0.0157$) with secondary optima at $B{=}6$
 (0.9621). Narrow bottlenecks ($B{\le}5$) underfit, while
 wide ones ($B{\ge}10$) overfit the healthy manifold and
-hurt generalisation.
+hurt generalisation (Fig.~\ref{fig:ablation_width}) .
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.85\columnwidth]{ablation_bottleneck.pdf}
-\caption{Reconstruction AUC (Score A) as a function of KAN autoencoder bottleneck width $B$. Narrow bottlenecks underfit, while excessive width overfits the healthy manifold and degrades anomaly detection.}
+\caption{Reconstruction AUC (Score A) as a function of KAN autoencoder bottleneck width $B$}
 \label{fig:ablation_width}
 \end{figure}
 
 \paragraph*{Score comparison.}
-The hierarchy of symbolic scores---B ($0.9026\pm0.0558$) $<$
-D ($0.9403\pm0.0422$) $<$ M ($\mathbf{0.9891\pm0.0069}$)---reveals
-that progressively richer statistical modelling of the healthy
-residual distribution yields stronger detectors, while all three
-remain fully interpretable. Notably, Score~M achieves the
-\textbf{highest mean AUC} across all proposed scores with the
-\textbf{lowest variance}, confirming that Mahalanobis whitening
-of symbolic residuals is the most robust interpretable detector.
-The combined Score~C $(0.5\,\tilde{A}{+}0.5\,\tilde{B})$ achieves
-$0.9716\pm0.0151$, demonstrating complementary signal between
-symbolic violation and reconstruction error.
-Fusing reconstruction with the Mahalanobis score (Score~F,
-$0.9824\pm0.0097$) is also highly competitive.
-
+The hierarchy B~$<$~D~$<$~M reveals that progressively richer
+statistical modelling of the healthy residual distribution yields
+stronger detectors, while all three remain fully interpretable.
+Score~M achieves the \textbf{highest mean AUC} with the \textbf{lowest
+variance}, confirming Mahalanobis whitening as the most robust
+interpretable detector.
 \paragraph*{Fully Symbolic Reconstruction.}
-Beyond the first-layer symbolic scores, distilling all layers of the KAN autoencoder into a deep stack of closed-form mathematical equations yields a \emph{fully symbolic reconstruction} score. Across $N{=}10$ seeds this achieves a mean AUC of $\mathbf{0.9777\pm0.0075}$---exceeding the opaque neural network reconstruction (Score~A, $0.9642\pm0.0157$) and placing between the combined Score~C/E ($0.9716$) and Score~F ($0.9824$). Because it entirely replaces the autoencoder with simple mathematical functions, the neural network is completely discarded at inference. Table~\ref{tab:efficiency} quantifies the practical consequence: KAN-AE-SymRecon stores only 10\,889 symbolic scalars---52\% fewer than the KAN-AE's 22\,880 trainable parameters---and runs in \textbf{0.018\,ms} per sample, 
-which is $\mathbf{200{\times}}$ faster than SHAP-weighted reconstruction (3.67\,ms; 200 background samples) and $\mathbf{271{\times}}$ faster than LIME-weighted reconstruction (4.99\,ms; 300 perturbations). When evaluated in optimised C++ (Eigen-batched primitives with sparse scatter-add routing), the symbolic evaluator closes to within 1.4$\times$ of the neural forward pass (Score~A: 0.013\,ms), confirming that the primary advantage of SymRecon is \emph{model-size} and \emph{interpretability}---the stored artefact is a set of human-readable equations rather than opaque weights.
+Distilling all KAN layers into closed-form equations yields a
+\emph{fully symbolic reconstruction} (AUC $\mathbf{0.9777\pm0.0075}$),
+exceeding the opaque reconstruction (Score~A) and requiring no NN at inference. Table~\ref{tab:efficiency} quantifies the
+consequence: KAN-AE-SymRecon stores only 10\,889 symbolic scalars---52\%
+fewer parameters---and runs at \textbf{0.018\,ms} per sample
+($\mathbf{200{\times}}$ faster than SHAP (3.67\,ms; 200 background samples), $\mathbf{271{\times}}$ faster
+than LIME (4.99\,ms; 300 perturbations)). The stored artefact is a set of human-readable equations
+rather than opaque weights.
 
 %------------------------------------------------------------
 \section{Discussion}
 \label{sec:discussion}
 
 \paragraph*{Why does combining calibrated symbolic violations help?}
-The calibrated symbolic-violation score (B, mean AUC~$0.9026\pm0.0558$)
+The calibrated symbolic-violation score (B)
 performs well on its own, confirming that BIC-optimal symbolic surrogates
 capture meaningful per-equation structure after joint-GAM
 calibration aligns the raw edge-level predictions with the
 network's hidden activations. When combined with the
-reconstruction score (A), the resulting Score~C ($0.9716\pm0.0151$) exceeds
+reconstruction score (A), the resulting Score~C  exceeds
 both individual scores, indicating that the symbolic violation
 signal and the reconstruction error capture partially orthogonal
 aspects of the healthy manifold.
-The Mahalanobis detector (M, $\mathbf{0.9891\pm0.0069}$) further
+The Mahalanobis detector (M) further
 improves over Score~B by exploiting the \emph{covariance structure}
 of the residuals rather than treating each equation independently;
 its low standard deviation confirms reliable performance across
 random seeds.
 
 \paragraph*{Why does the quadratic form dominate?}
-Two compounding factors explain the $98.2\%$ quadratic rate,
-and it is important to disentangle them rather than
-over-interpret the result as a physical law.
-\emph{First}, the feature domain is analytically favourable:
-because all inputs are scaled to $[0,1]$, every sufficiently
-smooth univariate function is uniformly approximatable by a
-low-degree polynomial on that compact interval (Weierstrass),
-so a quadratic already captures the bulk of any smooth
-B-spline without needing exotic primitives.
-\emph{Second}, the $L_1$+entropy regulariser of
-\texttt{efficient-kan} suppresses high-curvature splines,
-producing near-parabolic activation profiles around the
-training-data midpoint that further close the gap between the
-spline and its quadratic surrogate.
-These two modelling choices are sufficient to explain the
-observed dominance; no claim is made that gearbox physics is
-intrinsically quadratic.
-The practical consequence is nevertheless useful: each term
-$g_{ji}(x_i)\!=\!a_{ji}x_i^2\!+\!b_{ji}x_i\!+\!c_{ji}$
-is a single scalar expression with three interpretable
-coefficients that is trivially deployable on a microcontroller
-and differentiable in closed form.
-Future work on unscaled or multi-machine datasets should test
-whether richer primitives emerge when the domain-scaling bias
-is removed.
+Two compounding factors explain the $98.2\%$ quadratic rate.
+\emph{First}, all inputs are scaled to $[0,1]$, so every smooth
+univariate function is uniformly approximatable by a low-degree
+polynomial on that compact interval (Weierstrass), making a
+quadratic sufficient for any smooth B-spline.
+\emph{Second}, the $L_1$+entropy regulariser suppresses
+high-curvature splines, producing near-parabolic activations that
+further close the gap to the quadratic surrogate.
+No claim is made that gearbox physics is intrinsically quadratic;
+the dominance is a modelling artefact. The practical consequence is
+useful: each term $g_{ji}(x_i)\!=\!a_{ji}x_i^2\!+\!b_{ji}x_i\!+\!c_{ji}$
+has three interpretable coefficients, is trivially deployable on a
+microcontroller, and is differentiable in closed form. Future work on
+unscaled datasets should test if richer primitives arise.
 
 \paragraph*{Comparison to SHAP/LIME.}
-Multi-seed evaluation reveals that the single-seed SHAP AUC of $99.49\%$
-was an outlier: the mean over ten seeds is $95.35\pm1.29\%$, which falls
-\emph{below} Score~M ($98.91\pm0.69\%$), Score~F ($98.24\pm0.97\%$),
-and even LIME-weighted reconstruction ($98.21\pm0.76\%$). This variance
-in SHAP scores arises from its dependence on random background centroids
-and the specific faulty samples explained per seed.
-Beyond accuracy, Table~\ref{tab:efficiency} exposes a severe inference-time cost:
-computing a SHAP explanation for a single sample requires 3.67\,ms
-(200 perturbations) and LIME requires 4.99\,ms
-(300 perturbations), versus 0.013\,ms for the opaque KAN-AE forward pass
-and 0.018\,ms for the fully symbolic KAN-AE-SymRecon---making SHAP
-\textbf{283$\times$} and LIME \textbf{384$\times$} slower than the neural baseline.
-Both XAI methods also incur (i)~$\mathcal{O}(k n^2)$ sampling complexity per
-explanation, (ii)~no physical equation, and (iii)~no
-localisation: the ten most important SHAP features
-(\{S1\_rms, S1\_std, S4\_mean, \ldots\}) and the ten most
-important LIME features (\{S3\_rms, S3\_std, S4\_std,
-\ldots\}) overlap on only \emph{two} features (S3\_std and S2\_std). In
-contrast, Score~M returns a sparse vector of 22 equation
-residuals that are reproducible, require no external explainer
-at inference, and are directly mappable to specific sensor statistics.
+The AUC instability visible in Table~\ref{tab:bench} arises from
+SHAP's dependence on random background centroids and which faulty
+samples are explained per seed---an inherent limitation of
+perturbation-based explainers. Beyond accuracy,
+Table~\ref{tab:efficiency} exposes a severe inference cost: SHAP
+requires 3.67\,ms and LIME requires 4.99\,ms per sample
+(\textbf{283$\times$} and \textbf{384$\times$} slower than the KAN-AE
+forward pass), with $\mathcal{O}(kn^2)$ sampling complexity, no
+closed-form equation, and no fault localisation---the ten most
+important SHAP and LIME features overlap on only \emph{two} (S3\_std and S2\_std) of ten.
+In contrast, Score~M returns reproducible equation residuals that
+require no external explainer at inference and are directly mappable
+to specific sensor statistics.
 
 \paragraph*{Limitations.}
 (i) Our evaluation uses a single fault mode (broken tooth).
 Validating the symbolic equations on bearing-wear and
 misalignment datasets is future work.
 (ii) Although the symbolic library already includes thirteen
-primitives (including piecewise and oscillatory forms), only
+primitives, only
 five types were selected on this dataset; exploring
 data-driven library construction could improve flexibility.
 (iii) While our framework successfully symbolises the entire
 autoencoder (yielding a fully symbolic reconstruction AUC
-of $0.9777\pm0.0075$ that requires no neural network at inference),
+of $0.9777\pm0.0075$),
 we restrict our interpretability analysis to the first layer.
 Extracting physical meaning from the deeply composed
 formulas remains an open challenge.
@@ -729,30 +665,22 @@ By distilling each first-layer B-spline edge into a
 BIC-optimal symbolic primitive, we obtain 22 human-readable
 equations that describe the healthy operating manifold with
 a mean $R^2$ of 0.9999. Anomalies are detected through
-multiple complementary symbolic scores (mean\,$\pm$\,std over
-$N{=}10$ seeds): the calibrated symbolic-violation detector
+multiple complementary symbolic scores: the calibrated symbolic-violation detector
 achieves an AUC of $0.9026\pm0.0558$, and the Mahalanobis
 symbolic-residual detector reaches \textbf{$0.9891\pm0.0069$}---the
 highest mean and lowest variance of all proposed scores,
-surpassing OC-SVM ($0.9856\pm0.0038$), SHAP-weighted reconstruction
-($0.9535\pm0.0129$), and all deep baselines, while remaining fully
-interpretable and second only to LOF ($0.9937\pm0.0025$).
-The combined reconstruction + calibrated symbolic
-detector attains AUC $0.9716\pm0.0151$,
-exceeding the opaque reconstruction score ($0.9642\pm0.0157$) and the
-majority of unsupervised baselines. Unlike SHAP/LIME explanations---which
-achieve only $0.9535\pm0.0129$ and $0.9821\pm0.0076$ respectively in the
-multi-seed evaluation, with high variance from random background
-sampling---the proposed health equations are available in closed form,
-require no re-running of an explainer at inference, and
-provide a principled route from a violated equation to the
-specific sensor statistics that deviated under fault. Furthermore, by symbolising the entire
+surpassing most baselines, while remaining fully
+interpretable and second only to LOF.
+By symbolising the entire
 autoencoder into a stack of simple mathematical equations, we achieve a
 \emph{fully symbolic reconstruction} AUC of $0.9777\pm0.0075$ using only
 10\,889 stored symbolic scalars (52\% fewer than the KAN-AE's
 22\,880 trainable parameters), with a per-sample inference time of
 0.018\,ms---200$\times$ faster than SHAP and 271$\times$ faster than
-LIME---entirely discarding the neural network at deployment.
+LIME--- discarding the NN at deployment. Furthermore, unlike SHAP/LIME explanations, the proposed health equations are available in closed form,
+require no re-running of an explainer at inference, and
+provide a principled route from a violated equation to the
+specific sensor statistics that deviated under fault.
 These properties make KAN-symbolic health equations a promising ingredient for
 trustworthy, deployable condition monitoring of rotating
 machinery.
@@ -863,6 +791,36 @@ I.~U.~Hassan, K.~Panduru, D.~Riordan and J.~Walsh,
 ``A moving window-based feature extraction method for
 gearbox fault detection using vibration signals,''
 \emph{Machines}, vol.~14, no.~2, p.~178, 2026.
+
+\bibitem{kanad2025}
+Y.~Zhou \emph{et al.},
+``KAN-AD: Time series anomaly detection with Kolmogorov--Arnold networks,''
+\emph{arXiv:2411.00278}, 2025.
+
+\bibitem{ieeaccessinterp2024}
+% TODO: verify full author list
+``Enhancing reliability through interpretability: A comprehensive survey
+of interpretable intelligent fault diagnosis in rotating machinery,''
+\emph{IEEE Access}, 2024.
+\href{https://doi.org/10.1109/ACCESS.2024.3430010}{doi:10.1109/ACCESS.2024.3430010}
+
+\bibitem{britoshaprm2022}
+L.~C.~Brito, G.~A.~Susto, J.~N.~Brito, and M.~A.~V.~Duarte,
+``Fault detection of rotating machinery components using a stacked
+autoencoder and one-class SVM with SHAP explanations,''
+\emph{Mach.\ Learn.\ Appl.}, 2022.
+
+\bibitem{cranmer2023pysr}
+M.~Cranmer,
+``Interpretable machine learning for science with PySR and
+SymbolicRegression.jl,''
+\emph{arXiv:2305.01582}, 2023.
+
+\bibitem{cbmsurvey2025}
+% TODO: verify full author list
+``Recent advances in vibration condition-based fault diagnosis of
+rotating machinery,''
+\emph{J.\ Control Decis.}, Oct.\ 2025.
 
 \end{thebibliography}
 
