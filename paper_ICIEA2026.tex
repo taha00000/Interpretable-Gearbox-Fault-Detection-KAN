@@ -66,14 +66,12 @@ downtime in rotating machinery. Broken-tooth faults are particularly
 insidious: they propagate rapidly under load, can cause catastrophic
 drivetrain damage within seconds, and yet are extremely difficult to
 detect before they manifest as vibration anomalies~\cite{lei2020}.
-
 The standard diagnostic paradigm---train a supervised classifier on
 matched healthy/faulty recordings---is almost never achievable in
-practice. Faults are rare events; inducing them for data
-collection destroys the equipment under test; and the vibration signature
-of a given fault depends heavily on load level, shaft speed, and machine
-age, requiring exhaustive experimental coverage. Practitioners are left
-with abundant healthy data and minimal labeled fault data.
+practice, since faults are rare, inducing them destroys the equipment
+under test, and signatures vary heavily with load, shaft speed, and
+machine age; practitioners are thus left with abundant healthy data
+and minimal labeled fault data.
 
 Condition-based maintenance of industrial gearboxes relies on
 vibration analysis to catch incipient failures before
@@ -131,14 +129,14 @@ symbolisation quality, and $B{=}8$ is identified as the optimal
 bottleneck between reconstruction fidelity and parsimony.
 \end{enumerate}
 
-The remainder of this paper is organised as follows.
-Section~\ref{sec:related} reviews interpretable anomaly
-detection and KAN literature. Section~\ref{sec:method}
-details the five-stage pipeline. Section~\ref{sec:experiments}
-describes the dataset and benchmark protocol.
-Section~\ref{sec:results} presents the full results,
-and Section~\ref{sec:discussion} discusses limitations and
-directions for future work.
+% The remainder of this paper is organised as follows.
+% Section~\ref{sec:related} reviews interpretable anomaly
+% detection and KAN literature. Section~\ref{sec:method}
+% details the five-stage pipeline. Section~\ref{sec:experiments}
+% describes the dataset and benchmark protocol.
+% Section~\ref{sec:results} presents the full results,
+% and Section~\ref{sec:discussion} discusses limitations and
+% directions for future work.
 
 %------------------------------------------------------------
 \section{Related Work}
@@ -167,8 +165,7 @@ replaces fixed node non-linearities with learnable per-edge
 B-splines, yielding compact and interpretable function
 approximators. Subsequent work has extended KANs to Wav-KAN,
 FourierKAN and physics-informed variants, and applied them
-to supervised fault classification of bearings and gearboxes
-\cite{vaca2024kolmogorov}. However, prior fault-diagnosis
+to supervised fault classification ~\cite{wind}. However, prior fault-diagnosis
 applications of KANs are (i) \emph{supervised}, requiring
 labelled fault examples, and (ii) focus on classification
 accuracy rather than symbolic extraction.
@@ -267,28 +264,19 @@ $0.05\%$ is preferred. The BIC is computed as
 \begin{equation}
 \text{BIC} = n\log(\text{MSE}) + k\log n,
 \end{equation}
-where $k$ is the number of free parameters. On our trained model,
-824 of 839 surviving edges select the \emph{quadratic} form; eleven
- $\sin$; two \emph{hinge}; one \emph{sigmoid}; one
-$\tanh$. 
+where $k$ is the number of free parameters.
 \subsection{Health Equation Composition}
 Summing the symbolic edge functions entering each first-hidden-layer
-neuron yields a bank of 22 closed-form health equations
-\begin{equation}
-z_j \approx \sum_{i \in \mathcal{E}_j} g_{ji}(x_i),
-\quad j = 0,\ldots,21,
-\end{equation}
-where $\mathcal{E}_j$ is the surviving-edge set of neuron $j$
-and $g_{ji}$ is the BIC-selected symbolic form with fitted
-parameters. An excerpt of equation $z_0$ is
-\begin{align*}
-z_0 \approx\; &+0.045\,S1_{\text{rms}}^{2}+0.107\,S1_{\text{rms}}\\
-              &-0.051\,S1_{\text{margin}}^{2}-0.121\,S1_{\text{margin}}\\
-              &-0.064\,S3_{\text{crest}}^{2}-0.153\,S3_{\text{crest}}+\cdots
-\end{align*}
+neuron yields 22 closed-form health equations of the form
+$z_j \approx \sum_{i \in \mathcal{E}_j} g_{ji}(x_i)$, $j=0,\ldots,21$,
+where $\mathcal{E}_j$ is the surviving-edge set of neuron $j$ and
+$g_{ji}$ is the BIC-selected symbolic form with fitted parameters.
+For example, $z_0 \approx 0.045\,S1_{\text{rms}}^{2}+0.107\,S1_{\text{rms}}
+-0.051\,S1_{\text{margin}}^{2}-0.121\,S1_{\text{margin}}
+-0.064\,S3_{\text{crest}}^{2}-0.153\,S3_{\text{crest}}+\cdots$\,.
 These equations are human-readable, differentiable, deployable
-on microcontrollers, and---critically---they involve explicit
-references to specific sensor-level statistics, enabling downstream fault localisation.
+on microcontrollers, and---critically---involve explicit references
+to specific sensor-level statistics, enabling downstream fault localisation.
 
 \subsection{Anomaly Scoring}
 Given a test vector $\mathbf{x}_t$ we compute several
@@ -320,9 +308,24 @@ M(\mathbf{x}_t) = \sqrt{(\mathbf{r}_t-\boldsymbol{\mu})^\top
 \item \textbf{Score C} (combined reconstruction + symbolic) \\
 $C = \tfrac{1}{2}\,\widetilde{A} + \tfrac{1}{2}\,\widetilde{B}$,
 where $\widetilde{\cdot}$ denotes min-max normalisation.
+\item \textbf{Score D} ($R^2$-weighted tolerance band) \\
+Each symbolic residual $r_{t,j}$ is normalised by a per-equation
+tolerance $\epsilon_j$ derived from the healthy training residuals,
+weighted by the fitting quality $R^2_j$:
+$D(\mathbf{x}_t) = \sum_j R^2_j\,(r_{t,j}/\epsilon_j)^2$.
+\item \textbf{Score F} (combined reconstruction + Mahalanobis) \\
+$F = \tfrac{1}{2}\,\widetilde{A} + \tfrac{1}{2}\,\widetilde{M}$,
+blending opaque reconstruction with the interpretable
+Mahalanobis residual score.
+\item \textbf{SymRecon} (fully symbolic reconstruction) \\
+All KAN encoder and decoder layers are distilled into closed-form
+equations, with no NN at inference. The
+anomaly score is the mean squared deviation between $\mathbf{x}_t$ and its
+fully symbolic reconstruction $\hat{\mathbf{x}}^{\text{sym}}_t$:
+$\text{SymRecon}(\mathbf{x}_t)=\frac{1}{44}\|\mathbf{x}_t-\hat{\mathbf{x}}^{\text{sym}}_t\|_2^2$.
 \end{itemize}
 
-Scores B and M are the key interpretable detectors: a large
+Scores B, D, M, F and SymRecon are the key interpretable detectors: a large
 value means that one or more \emph{symbolic equations} have
 been violated beyond what healthy data do by chance, and the
 specific offending equation can be read off from the
@@ -377,7 +380,7 @@ median $1.0000$), and every edge meets the $R^2{>}0.95$ quality
 threshold---a $100\%$ symbolisation rate.
 
 \subsection{Anomaly Detection}
-Table~\ref{tab:scores} reports all seven KAN-based scores at
+Table~\ref{tab:scores} reports all eight KAN-based scores at
 $W{=}1000$ over $N{=}10$ seeds.
 The calibrated symbolic-violation score (B) confirms that symbolic
 surrogates capture substantial discriminative structure after joint-GAM
@@ -388,11 +391,14 @@ residuals rather than treating each equation independently---yielding
 the highest mean AUC and lowest variance of all proposed scores.
 The combined reconstruction + symbolic-violation detector (C)
 exceeds the opaque reconstruction score alone, indicating partially
-orthogonal signal between the two components.
+orthogonal signal between the two components. F blends
+reconstruction with the stronger Mahalanobis signal, bridging the gap between A and M.
+The fully symbolic reconstruction (SymRecon) replaces the NN entirely at inference and still surpasses A, confirming that the closed-form health
+equations retain nearly all discriminative information.
 
 \begin{table}[t]
 \centering
-\caption{AUC (mean\,$\pm$\,std) of the seven KAN-AE scores at $W{=}1000$ on the
+\caption{AUC (mean\,$\pm$\,std) of the eight KAN-AE scores at $W{=}1000$ on the
 SpectraQuest broken-tooth benchmark over 10 seeds}
 \label{tab:scores}
 \begin{tabular}{lccc}
@@ -406,6 +412,7 @@ D & $R^2$-weighted tolerance band     & 0.9403 & $\pm$0.0422 \\
 E & $0.5\,\tilde{A}+0.5\,\tilde{D}$  & 0.9716 & $\pm$0.0146 \\
 \textbf{M} & Mahalanobis on symbolic residuals & \textbf{0.9891} & $\pm$\textbf{0.0069} \\
 F & $0.5\,\tilde{A}+0.5\,\tilde{M}$  & 0.9824 & $\pm$0.0097 \\
+SymRecon & Fully symbolic reconstruction      & 0.9777 & $\pm$0.0075 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -423,7 +430,7 @@ equation-level attribution.
 eight window sizes. The top block lists classical unsupervised
 detectors; the middle block lists post-hoc XAI-weighted scores;
 the bottom block lists the proposed KAN-symbolic scores.
-Smaller window sizes are included to illustrate the performance trend with context length; $W{=}1000$ is the primary evaluation point at which absolute AUC differences are most meaningful, so all $W{=}1000$ entries report mean\,$\pm$\,std over $N{=}10$
+ $W{=}1000$ is the primary evaluation point at which absolute AUC differences are most meaningful, so all $W{=}1000$ entries report mean\,$\pm$\,std over $N{=}10$
 independent seeds (each seed changes the train/test split and
 model initialisation).}
 \label{tab:bench}
@@ -483,7 +490,7 @@ rankings, they cannot point at a specific
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.99\columnwidth]{fault_localisation_figure.pdf}
+\includegraphics[width=0.9\columnwidth]{fault_localisation_figure.pdf}
 \caption{Fault localisation via symbolic equation violation.
 \textbf{(a)}~Per-equation fault ratio $\rho_j$ for all 22
 health equations, sorted ascending; bars are coloured by the
@@ -501,8 +508,7 @@ $z_6$ ($\rho{=}16.2\times$) is dominated by S1 statistics}
 
 Table~\ref{tab:efficiency} compares model size and per-sample inference
 time across all methods. KAN-AE-SymRecon achieves the smallest footprint
-(10\,889 stored symbolic scalars, 52\% fewer than the KAN-AE's 22\,880
-trainable parameters) and runs in 0.018\,ms per sample---$200{\times}$
+and runs in 0.018\,ms per sample---$200{\times}$
 faster than SHAP-weighted reconstruction (3.67\,ms; 200 background samples) and $271{\times}$
 faster than LIME-weighted reconstruction (4.99\,ms; 300 perturbations).
 
@@ -566,7 +572,7 @@ hurt generalisation (Fig.~\ref{fig:ablation_width}) .
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.85\columnwidth]{ablation_bottleneck.pdf}
+\includegraphics[width=0.6\columnwidth]{ablation_bottleneck.pdf}
 \caption{Reconstruction AUC (Score A) as a function of KAN autoencoder bottleneck width $B$}
 \label{fig:ablation_width}
 \end{figure}
@@ -604,15 +610,13 @@ signal and the reconstruction error capture partially orthogonal
 aspects of the healthy manifold.
 The Mahalanobis detector (M) further
 improves over Score~B by exploiting the \emph{covariance structure}
-of the residuals rather than treating each equation independently;
-its low standard deviation confirms reliable performance across
-random seeds.
+of the residuals rather than treating each equation independently.
 
 \paragraph*{Why does the quadratic form dominate?}
 Two compounding factors explain the $98.2\%$ quadratic rate.
 \emph{First}, all inputs are scaled to $[0,1]$, so every smooth
 univariate function is uniformly approximatable by a low-degree
-polynomial on that compact interval (Weierstrass), making a
+polynomial on that compact interval, making a
 quadratic sufficient for any smooth B-spline.
 \emph{Second}, the $L_1$+entropy regulariser suppresses
 high-curvature splines, producing near-parabolic activations that
@@ -674,10 +678,9 @@ interpretable and second only to LOF.
 By symbolising the entire
 autoencoder into a stack of simple mathematical equations, we achieve a
 \emph{fully symbolic reconstruction} AUC of $0.9777\pm0.0075$ using only
-10\,889 stored symbolic scalars (52\% fewer than the KAN-AE's
-22\,880 trainable parameters), with a per-sample inference time of
+10\,889 stored symbolic scalars (52\% fewer than the KAN-AE), with a per-sample inference time of
 0.018\,ms---200$\times$ faster than SHAP and 271$\times$ faster than
-LIME--- discarding the NN at deployment. Furthermore, unlike SHAP/LIME explanations, the proposed health equations are available in closed form,
+LIME. Furthermore, unlike SHAP/LIME explanations, the proposed health equations are available in closed form,
 require no re-running of an explainer at inference, and
 provide a principled route from a violated equation to the
 specific sensor statistics that deviated under fault.
@@ -686,141 +689,170 @@ trustworthy, deployable condition monitoring of rotating
 machinery.
 
 %------------------------------------------------------------
+
 \bibliographystyle{IEEEtran}
 \begin{thebibliography}{00}
 
 \bibitem{lei2020}
-Y.~Lei, B.~Yang, X.~Jiang, F.~Jia, N.~Li, A.~K. Nandi:
-Applications of machine learning to machine fault diagnosis: A review and roadmap.
-\textit{Mech.\ Syst.\ Signal Process.}\ \textbf{138}, 106587 (2020).
-\href{https://doi.org/10.1016/j.ymssp.2019.106587}{doi:10.1016/j.ymssp.2019.106587}
+Y.~Lei, \textit{et~al.},
+``Applications of machine learning to machine fault diagnosis: A review and roadmap,''
+\textit{Mech.\ Syst.\ Signal Process.}, vol.~138, p.~106587, 2020,
+doi: \href{https://doi.org/10.1016/j.ymssp.2019.106587}{10.1016/j.ymssp.2019.106587}.
 
 \bibitem{liu2024kan}
-Z.~Liu, Y.~Wang, S.~Vaidya, F.~Ruehle, J.~Halverson, M.~Solja\v{c}i\'c,
-T.~Y.~Hou and M.~Tegmark,
-``KAN: Kolmogorov--Arnold Networks,''
-\emph{arXiv:2404.19756}, 2024.
+Z.~Liu, \textit{et~al.},
+``KAN: Kolmogorov--Arnold networks,''
+\textit{arXiv preprint arXiv:2404.19756}, 2024.
 
 \bibitem{vaca2024kolmogorov}
-R.~Vaca-Rubio, L.~Blanco, R.~Pereira and M.~Caus,
-``Kolmogorov--Arnold Networks (KANs) for time series analysis,''
-\emph{arXiv:2405.08790}, 2024.
+R.~Vaca-Rubio, L.~Blanco, R.~Pereira, and M.~Caus,
+``Kolmogorov--Arnold networks (KANs) for time series analysis,''
+\textit{arXiv preprint arXiv:2405.08790}, 2024.
 
 \bibitem{IsolationForest}
 F.~T.~Liu, K.~M.~Ting, and Z.-H.~Zhou,
 ``Isolation forest,''
-in \emph{Proc.\ IEEE Int.\ Conf.\ Data Mining (ICDM)}, 2008, pp.\ 413--422.
+in \textit{Proc.\ 8th IEEE Int.\ Conf.\ Data Mining (ICDM)},
+Pisa, Italy, Dec.\ 2008, pp.\ 413--422,
+doi: \href{https://doi.org/10.1109/ICDM.2008.17}{10.1109/ICDM.2008.17}.
 
 \bibitem{OCSVM}
 B.~Sch\"olkopf, J.~C.~Platt, J.~Shawe-Taylor, A.~J.~Smola, and R.~C.~Williamson,
 ``Estimating the support of a high-dimensional distribution,''
-\emph{Neural Computation}, vol.~13, no.~7, pp.\ 1443--1471, 2001.
+\textit{Neural Comput.}, vol.~13, no.~7, pp.\ 1443--1471, Jul.\ 2001,
+doi: \href{https://doi.org/10.1162/089976601750264965}{10.1162/089976601750264965}.
 
 \bibitem{LOF}
 M.~M.~Breunig, H.-P.~Kriegel, R.~T.~Ng, and J.~Sander,
 ``LOF: Identifying density-based local outliers,''
-in \emph{Proc.\ ACM SIGMOD Int.\ Conf.\ Management of Data}, 2000, pp.\ 93--104.
+in \textit{Proc.\ ACM SIGMOD Int.\ Conf.\ Management of Data},
+Dallas, TX, USA, May 2000, pp.\ 93--104,
+doi: \href{https://doi.org/10.1145/342009.335388}{10.1145/342009.335388}.
 
 \bibitem{patchcoreref}
 K.~Roth, L.~Pemula, J.~Zepeda, B.~Sch\"olkopf, T.~Brox, and P.~Gehler,
 ``Towards total recall in industrial anomaly detection,''
-in \emph{Proc.\ CVPR}, 2022.
+in \textit{Proc.\ IEEE/CVF Conf.\ (CVPR)},
+New Orleans, LA, USA, Jun.\ 2022, pp.\ 14298--14308,
+doi: \href{https://doi.org/10.1109/CVPR52688.2022.01392}{10.1109/CVPR52688.2022.01392}.
 
 \bibitem{autoencref}
 G.~E.~Hinton and R.~R.~Salakhutdinov,
 ``Reducing the dimensionality of data with neural networks,''
-\emph{Science}, vol.~313, no.~5786, pp.\ 504--507, 2006.
+\textit{Science}, vol.~313, no.~5786, pp.\ 504--507, Jul.\ 2006,
+doi: \href{https://doi.org/10.1126/science.1127647}{10.1126/science.1127647}.
 
 \bibitem{vaeref}
 D.~P.~Kingma and M.~Welling,
-``Auto-encoding variational Bayes,''
-in \emph{Proc.\ Int.\ Conf.\ Learning Representations (ICLR)}, 2014.
+``Auto-encoding variational {B}ayes,''
+in \textit{Proc.\ 2nd Int.\ Conf.\ Learning Representations (ICLR)},
+Banff, Canada, Apr.\ 2014,
+arXiv: \href{https://arxiv.org/abs/1312.6114}{1312.6114}.
 
 \bibitem{deeponeclassref}
-L.~Ruff \emph{et al.},
+L.~Ruff, \textit{et~al.},
 ``Deep one-class classification,''
-in \emph{Proc.\ ICML}, 2018.
+in \textit{Proc.\ 35th Int.\ Conf.\ Machine Learning (ICML)},
+Stockholm, Sweden, Jul.\ 2018, pp.\ 4393--4402.
 
 \bibitem{teacherstudent}
-P.~Bergmann, M.~Fauser, D.~Sattlegger and C.~Steger,
+P.~Bergmann, \textit{et~al.},
 ``Uninformed students: Student--teacher anomaly detection
 with discriminative latent embeddings,''
-in \emph{Proc.\ CVPR}, 2020.
+in \textit{Proc.\ IEEE/CVF Conf.\ Computer Vision and Pattern Recognition (CVPR)},
+Seattle, WA, USA, Jun.\ 2020, pp.\ 4183--4192,
+doi: \href{https://doi.org/10.1109/CVPR42600.2020.00424}{10.1109/CVPR42600.2020.00424}.
+
 \bibitem{ssldaeref}
 P.~Vincent, H.~Larochelle, Y.~Bengio, and P.-A.~Manzagol,
 ``Extracting and composing robust features with denoising autoencoders,''
-in \emph{Proc.\ Int.\ Conf.\ Machine Learning (ICML)}, 2008, pp.\ 1096--1103.
+in \textit{Proc.\ 25th Int.\ Conf.\ Machine Learning (ICML)},
+Helsinki, Finland, Jul.\ 2008, pp.\ 1096--1103,
+doi: \href{https://doi.org/10.1145/1390156.1390294}{10.1145/1390156.1390294}.
 
 \bibitem{shapref}
 S.~M.~Lundberg and S.-I.~Lee,
 ``A unified approach to interpreting model predictions,''
-in \emph{Proc.\ Advances in Neural Information Processing Systems (NeurIPS)},
-vol.~30, 2017.
+in \textit{Proc.\ NeurIPS},
+vol.~30, Long Beach, CA, USA, Dec.\ 2017, pp.\ 4765--4774,
+doi: \href{https://doi.org/10.5555/3295222.3295230}{10.5555/3295222.3295230}.
 
 \bibitem{LIMEref}
 M.~T.~Ribeiro, S.~Singh, and C.~Guestrin,
-```Why should I trust you?': Explaining the predictions of any classifier,''
-in \emph{Proc.\ ACM SIGKDD Int.\ Conf.\ Knowledge Discovery and Data Mining},
-2016, pp.\ 1135--1144.
+``{`Why should I trust you?'}: Explaining the predictions of any classifier,''
+in \textit{Proc.\ 22nd ACM SIGKDD Int.\ Conf.\ Knowledge Discovery
+and Data Mining}, San Francisco, CA, USA, Aug.\ 2016, pp.\ 1135--1144,
+doi: \href{https://doi.org/10.1145/2939672.2939778}{10.1145/2939672.2939778}.
 
 \bibitem{Mahalanobis1ref}
-X.~Zhao, Z.~Zhao, X.~Cui \emph{et al.},
+X.~Zhao, Z.~Zhao, X.~Cui \textit{et~al.},
 ``Few-shot bearing fault diagnosis using adaptive detail convolution and
 global KAN-transformer with Mahalanobis distance,''
-\emph{J.\ Vib.\ Eng.\ Technol.}, vol.~13, no.~296, 2025.
+\textit{J.\ Vib.\ Eng.\ Technol.}, vol.~13, no.~296, 2025.
 
 \bibitem{Mahalanobis2ref}
-Y.~Hou, Z.~Chen, M.~Wu, C.-S.~Foo, X.~Li, and R.~M.~Shubair,
+Y.~Hou, \textit{et~al.},
 ``Mahalanobis distance based adversarial network for anomaly detection,''
-in \emph{Proc.\ IEEE Int.\ Conf.\ Acoustics, Speech and Signal Processing
-(ICASSP)}, Barcelona, Spain, 2020, pp.\ 3192--3196.
+in \textit{Proc.\ IEEE Int.\ Conf.\ Acoustics, Speech and Signal Processing
+(ICASSP)}, Barcelona, Spain, May 2020, pp.\ 3192--3196,
+doi: \href{https://doi.org/10.1109/ICASSP40776.2020.9054057}{10.1109/ICASSP40776.2020.9054057}.
 
 \bibitem{Mahalanobis3ref}
 R.~Kamoi and K.~Kobayashi,
 ``Why is the Mahalanobis distance effective for anomaly detection?''
-\emph{arXiv preprint arXiv:2003.00402}, 2020.
+\textit{arXiv preprint arXiv:2003.00402}, 2020.
 
 \bibitem{cranmer2020discovering}
-M.~Cranmer \emph{et al.},
-``Discovering symbolic models from deep learning with
-inductive biases,''
-in \emph{Proc.\ NeurIPS}, 2020.
+M.~Cranmer, A.~Sanchez-Gonzalez, P.~Battaglia, R.~Xu, K.~Cranmer,
+D.~Spergel, and S.~Ho,
+``Discovering symbolic models from deep learning with inductive biases,''
+in \textit{Proc.\ NeurIPS},
+vol.~33, 2020, pp.\ 17429--17442,
+doi: \href{https://doi.org/10.5555/3495724.3497186}{10.5555/3495724.3497186}.
 
 \bibitem{spectraquest}
-I.~U.~Hassan, K.~Panduru, D.~Riordan and J.~Walsh,
-``A moving window-based feature extraction method for
-gearbox fault detection using vibration signals,''
-\emph{Machines}, vol.~14, no.~2, p.~178, 2026.
+I.~U.~Hassan, K.~Panduru, D.~Riordan, and J.~Walsh,
+``A moving window-based feature extraction method for gearbox fault detection
+using vibration signals,''
+\textit{Machines}, vol.~14, no.~2, p.~178, 2026.
 
 \bibitem{kanad2025}
-Y.~Zhou \emph{et al.},
+Y.~Zhou \textit{et~al.},
 ``KAN-AD: Time series anomaly detection with Kolmogorov--Arnold networks,''
-\emph{arXiv:2411.00278}, 2025.
+\textit{arXiv preprint arXiv:2411.00278}, 2025.
 
 \bibitem{ieeaccessinterp2024}
-% TODO: verify full author list
+G.~Chen, J.~Yuan, Y.~Zhang, H.~Zhu, R.~Huang, F.~Wang, and W.~Li,
 ``Enhancing reliability through interpretability: A comprehensive survey
 of interpretable intelligent fault diagnosis in rotating machinery,''
-\emph{IEEE Access}, 2024.
-\href{https://doi.org/10.1109/ACCESS.2024.3430010}{doi:10.1109/ACCESS.2024.3430010}
+\textit{IEEE Access}, vol.~12, 2024,
+doi: \href{https://doi.org/10.1109/ACCESS.2024.3430010}{10.1109/ACCESS.2024.3430010}.
 
 \bibitem{britoshaprm2022}
 L.~C.~Brito, G.~A.~Susto, J.~N.~Brito, and M.~A.~V.~Duarte,
-``Fault detection of rotating machinery components using a stacked
-autoencoder and one-class SVM with SHAP explanations,''
-\emph{Mach.\ Learn.\ Appl.}, 2022.
+``An explainable artificial intelligence approach for unsupervised fault
+detection and diagnosis in rotating machinery,''
+\textit{Mech.\ Syst.\ Signal Process.}, vol.~163, p.~108105, Jan.\ 2022,
+doi: \href{https://doi.org/10.1016/j.ymssp.2021.108105}{10.1016/j.ymssp.2021.108105}.
 
 \bibitem{cranmer2023pysr}
 M.~Cranmer,
-``Interpretable machine learning for science with PySR and
-SymbolicRegression.jl,''
-\emph{arXiv:2305.01582}, 2023.
+``Interpretable machine learning for science with {PySR} and
+{SymbolicRegression.jl},''
+\textit{arXiv preprint arXiv:2305.01582}, 2023.
 
 \bibitem{cbmsurvey2025}
-% TODO: verify full author list
+R.~Lu, \textit{et~al.},
 ``Recent advances in vibration condition-based fault diagnosis of
 rotating machinery,''
-\emph{J.\ Control Decis.}, Oct.\ 2025.
+\textit{J.\ Control Decis.}, vol.~13, no.~1, pp.\ 1--32, Oct.\ 2025,
+doi: \href{https://doi.org/10.1080/23307706.2025.2526054}{10.1080/23307706.2025.2526054}.
+
+\bibitem{wind}
+W. H. Chen, H. T. Zhou, and M. Xia, ``AttCWKAN: A Novel Convolution
+Weighted Kolmogorov-Arnold Network with Attention Mechanism for Wind
+Turbine Gearbox Fault Diagnosis,'' \textit{IEEE Trans. Instrum. Meas.},
+vol.~74, 2025.
 
 \end{thebibliography}
 
