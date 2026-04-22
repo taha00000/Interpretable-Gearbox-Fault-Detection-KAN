@@ -635,10 +635,10 @@ samples are explained per seed---an inherent limitation of
 perturbation-based explainers. Beyond accuracy,
 Table~\ref{tab:efficiency} exposes a severe inference cost: SHAP
 requires 3.67\,ms and LIME requires 4.99\,ms per sample
-(\textbf{283$\times$} and \textbf{384$\times$} slower than the KAN-AE
+(\textbf{276$\times$} and \textbf{376$\times$} slower than the KAN-AE
 forward pass), with $\mathcal{O}(kn^2)$ sampling complexity, no
 closed-form equation, and no fault localisation---the ten most
-important SHAP and LIME features overlap on only \emph{two} (S3\_std and S2\_std) of ten.
+important SHAP and LIME features overlap on only \emph{three} (S4\_shape, S4\_kurt, S4\_impulse) of ten.
 In contrast, Score~M returns reproducible equation residuals that
 require no external explainer at inference and are directly mappable
 to specific sensor statistics.
